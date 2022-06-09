@@ -4,55 +4,71 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <netinet/in.h>
+#include <netinet/in.h> 
+#include<fcntl.h> 
+#include<errno.h> 
 
 using namespace std;
 
 
-#define PORT 8080
+#define PORT 8082
 
-long findSize(FILE *fp)
+long getFileSize(string fileName)
 {
-	fseek(fp, 0L, SEEK_END);
-	long size = ftell(fp);
-	rewind(fp);
-	return size;
-}
 
-int sendall(int sock, unsigned char *buffer, long remaining)
-{
-	int n, offset = 0;
-	while (remaining)
-	{
-		n = send(sock, buffer + offset, remaining, 0);
-		if (n == -1)
-			break;
-		remaining -= n;
-		offset += n;
-	}
-	return n != -1;
-}
-
-
-void processGetRequest(int sock) {
-    FILE *fp = fopen("index.html", "rb");
-    if (fp)
-    {
-        long filesize = findSize(fp);
-        send(sock, &filesize, sizeof(filesize), 0);
-        unsigned char *buffer = (unsigned char*) malloc(filesize * sizeof(unsigned char));
-        if (buffer)
-        {
-            fread(buffer, sizeof(unsigned char), filesize, fp);
-            //envia o arquivo para o cliente
-            if (sendall(sock, buffer, filesize))
-                printf("\nFile %s successfully sended\n", "index.html");
-            else
-                printf("\nError sending file %s\n", "index.html");
-            free(buffer);
-        }
-        fclose(fp);
+    FILE *filePointer = fopen(fileName.c_str(), "rb");
+    long fileSize = 0;
+	if (filePointer) {
+        fseek(filePointer, 0L, SEEK_END);
+        fileSize = ftell(filePointer);
+        rewind(filePointer);
+        fclose(filePointer);
     }
+	return fileSize;
+}
+
+void sendFile(string fileName, int socket)
+{
+    const int bufferSize = 32767; // max send size, default limit of send system call
+    char buffer[bufferSize];
+    int chunkSize = 1, sentChunkSize = 1;
+
+    int fd = open(fileName.c_str(), O_RDONLY);
+
+	int sentDataSize, offset = 0;
+	while (fd > 0 && chunkSize > 0 && sentChunkSize > 0)
+	{
+        chunkSize = read(fd, buffer, bufferSize);
+        printf("%s\n", buffer);
+        if (chunkSize < 0)
+		sentChunkSize = send(socket, buffer, chunkSize, 0);
+        printf("%d\n", sentChunkSize);
+		if (sentChunkSize == -1) break;
+	}
+
+    close(fd);
+}
+
+
+void sendHttpResponseHeader(string fileName, int socket) {
+    long fileSize = getFileSize(fileName);
+    string str = "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " +  to_string(fileSize) + "\n\n";
+    // write(socket , str.c_str() , (int)str.size());
+    send(socket, str.c_str(), (int)str.size(), 0);
+}
+
+
+void getHttpRequest(int socket) {
+    const int bufferSize = 30000;
+    char buffer[bufferSize] = {0};
+    int valread = read(socket , buffer, bufferSize);
+    printf("%s\n", buffer);
+}
+
+void processGetRequest(string fileName, int socket) {
+    getHttpRequest(socket);
+    sendHttpResponseHeader(fileName, socket);
+    sendFile(fileName, socket);
 }
 
 int main()
@@ -95,34 +111,7 @@ int main()
             exit(EXIT_FAILURE);
         }
 
-        FILE *fp = fopen("index.html", "rb");
-        if (fp)
-        {
-            long filesize = findSize(fp);
-            unsigned char *fileBuffer = (unsigned char*) malloc(filesize * sizeof(unsigned char));
-            if (fileBuffer)
-            {
-                fread(fileBuffer, sizeof(unsigned char), filesize, fp);
-
-                string html = "";
-                for (int i = 0; i < filesize; i++) {
-                    html += fileBuffer[i];
-                }
-
-                string str = "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " +  to_string(filesize) + "\n\n" + html;
-        
-                char buffer[30000] = {0};
-                valread = read( new_socket , buffer, 30000);
-                printf("%s\n",buffer );
-                write(new_socket , str.c_str() , (int)str.size());
-                printf("------------------Hello message sent-------------------\n");
-                close(new_socket);
-
-
-                free(fileBuffer);
-            }
-            fclose(fp);
-        }
+        processGetRequest("index.html", new_socket);
     }
     return 0;
 }
