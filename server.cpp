@@ -11,7 +11,7 @@
 using namespace std;
 
 
-#define PORT 8082
+#define PORT 8083
 
 long getFileSize(string fileName)
 {
@@ -31,20 +31,26 @@ void sendFile(string fileName, int socket)
 {
     const int bufferSize = 32767; // max send size, default limit of send system call
     char buffer[bufferSize];
-    int chunkSize = 1, sentChunkSize = 1;
+    int chunkSize = 0, sentChunkSize = 0;
 
     int fd = open(fileName.c_str(), O_RDONLY);
 
+    if (fd == -1) {
+        perror("Internal Server Error Reading File");
+        exit(1);
+    }
+
 	int sentDataSize, offset = 0;
-	while (fd > 0 && chunkSize > 0 && sentChunkSize > 0)
-	{
+	do {
         chunkSize = read(fd, buffer, bufferSize);
         printf("%s\n", buffer);
-        if (chunkSize < 0)
-		sentChunkSize = send(socket, buffer, chunkSize, 0);
-        printf("%d\n", sentChunkSize);
-		if (sentChunkSize == -1) break;
-	}
+        if (chunkSize > 0) {
+		    sentChunkSize = write(socket, buffer, chunkSize);
+            printf("%d\n", sentChunkSize);
+        }
+		if (sentChunkSize == -1)
+            break;
+	} while(chunkSize > 0 && sentChunkSize > 0);
 
     close(fd);
 }
@@ -53,12 +59,13 @@ void sendFile(string fileName, int socket)
 void sendHttpResponseHeader(string fileName, int socket) {
     long fileSize = getFileSize(fileName);
     string str = "HTTP/1.1 200 OK\nContent-Type: text/html\nContent-Length: " +  to_string(fileSize) + "\n\n";
-    // write(socket , str.c_str() , (int)str.size());
-    send(socket, str.c_str(), (int)str.size(), 0);
+    write(socket , str.c_str() , (int)str.size());
+    // send(socket, str.c_str(), (int)str.size(), 0);
 }
 
 
 void getHttpRequest(int socket) {
+    // como é um request http posso assumir que ele nao eh muito grande
     const int bufferSize = 30000;
     char buffer[bufferSize] = {0};
     int valread = read(socket , buffer, bufferSize);
