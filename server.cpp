@@ -78,7 +78,8 @@ string getFileType(string fileName) {
     const map<string, string> typeByExtensions = {
         {"html", "text/html"},
         {"png", "image/png"},
-        {"js", "text/javascript"}
+        {"js", "text/javascript"},
+        {"ico", "image/vnd.microsoft.icon"}
     }; 
 
     return typeByExtensions.at(extension);
@@ -188,9 +189,10 @@ int main()
         perror("In listen");
         exit(EXIT_FAILURE);
     }
+
+    printf("\n------------ Server Running on Port 8080 ------------\n\n");
     while(1)
     {
-        printf("\n------------ Server Running on Port 8080 ------------\n\n");
         //  zera todo conjunto de sockets. Este conjunto é usado para monitorar os clientes conectados
 		FD_ZERO(&socketSet);
 

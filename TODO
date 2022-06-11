@@ -1,0 +1,4 @@
+Tratar todos os tipos de arquivos
+Reponder com código http adequado (200, 400, 500, 401)
+Não deixar o server quebrar caso o arquivo não exista
+O que devo retorna ser nao tenho a extensao
