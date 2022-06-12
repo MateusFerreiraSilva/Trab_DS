@@ -1,17 +1,4 @@
-// Server side C program to demonstrate Socket programming
-#include <bits/stdc++.h>
-#include <stdio.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <netinet/in.h> 
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <arpa/inet.h>
-
-using namespace std;
+#include "HttpServer.h"
 
 class HttpRequest {
 public:
@@ -23,9 +10,7 @@ public:
     string accept;
 };
 
-#define PORT 8080
-
-ulong getFileSize(string fileName)
+ulong HttpServer::getFileSize(string fileName)
 {
     struct stat fileInfo;
 
@@ -38,7 +23,7 @@ ulong getFileSize(string fileName)
     return fileInfo.st_size;
 }
 
-void sendFile(string fileName, int socket)
+void HttpServer::sendFile(string fileName, int socket)
 {
     const int bufferSize = 32767; // max send size, default limit of send system call
     char buffer[bufferSize];
@@ -69,11 +54,11 @@ void sendFile(string fileName, int socket)
     close(fd);
 }
 
-string getExtension(string fileName) {
+string HttpServer::getExtension(string fileName) {
     return fileName.substr(fileName.find_last_of(".") + 1);
 }
 
-string getFileType(string fileName) {
+string HttpServer::getFileType(string fileName) {
     string extension = getExtension(fileName);
     const map<string, string> typeByExtensions = {
         {"html", "text/html"},
@@ -85,14 +70,14 @@ string getFileType(string fileName) {
     return typeByExtensions.at(extension);
 }
 
-void sendHttpResponseHeader(string fileName, int socket) {
+void HttpServer::sendHttpResponseHeader(string fileName, int socket) {
     long fileSize = getFileSize(fileName);
     string str = "HTTP/1.1 200 OK\nContent-Type: " + getFileType(fileName) + "\nContent-Length: " +  to_string(fileSize) + "\n\n";
     write(socket , str.c_str() , (int)str.size());
     // send(socket, str.c_str(), (int)str.size(), 0);
 }
 
-vector<string> split(const char *str, const char delimiter) {
+vector<string> HttpServer::split(const char *str, const char delimiter) {
     vector<string> tokens;
     char *it = strtok((char*)str, &delimiter);
 
@@ -104,7 +89,27 @@ vector<string> split(const char *str, const char delimiter) {
     return tokens;
 }
 
-map<string, string> parseHttpRequest(char *buffer) {
+// map<string, string> HttpServer::parseHttpRequest(char *buffer) {
+//     vector<string> lines = split(buffer, '\n');
+//     int sz = lines.size();
+//     if (sz > 0) {
+//         vector<vector<string>> words(lines.size());
+//         for (int i = 0; i < lines.size(); i++) {
+//             words[i] = split(lines[i].c_str(), ' ');
+//         }
+//         map<string, string> httpRequest = {
+//             {"Method", words[0][0]},
+//             {"Url", words[0][1]},
+//             {"Protocol Version", words[0][2]},
+//             {"Host", words[1][0]},
+//             {"User-Agent", words[2][0]},
+//         };
+//         return httpRequest;
+//     }
+//     return map<string, string>();
+// }
+
+map<string, string> HttpServer::parseHttpRequest(char *buffer) {
     vector<string> lines = split(buffer, '\n');
     vector<vector<string>> words(lines.size());
     for (int i = 0; i < lines.size(); i++) {
@@ -117,47 +122,74 @@ map<string, string> parseHttpRequest(char *buffer) {
         {"Host", words[1][0]},
         {"User-Agent", words[2][0]},
     };
-
     return httpRequest;
 }
 
-map<string, string> getHttpRequest(int socket) {
-    // como é um request http posso assumir que ele nao eh muito grande
-    const int bufferSize = 30000;
-    char buffer[bufferSize] = {0};
-    int valread = read(socket , buffer, bufferSize);
-    printf("%s\n", buffer);
-    return parseHttpRequest(buffer);
+// map<string, string> HttpServer::getHttpRequest(int socket) {
+//     /*TO DO Loop de leitura para arquivo grandes*/
+//     char *buffer = *httpRequestBuffer;
+//     int httpRequestSize = read(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE);
+//     if (httpRequestSize < 0) {
+//         perror("Error while reading http request");
+//         exit(EXIT_FAILURE);
+//     } else if (httpRequestSize == 0) {
+//         perror("Request is null lol");
+//         exit(EXIT_FAILURE);
+//     } else {
+//         printf("%s\n", buffer);
+//         return parseHttpRequest(buffer);
+//     }
+// }
+
+map<string, string> HttpServer::getHttpRequest(int socket) {
+    /*TO DO Loop de leitura para arquivo grandes*/
+    // char *buffer = *httpRequestBuffer;
+    char buffer[MAX_HTTP_GET_MESSAGE_SIZE];
+    int httpRequestSize = read(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE);
+    if (httpRequestSize < 0) {
+        perror("Error while reading http request");
+        exit(EXIT_FAILURE);
+    } else if (httpRequestSize == 0) {
+        printf("Invalid method closing socket\n");
+        close(socket);
+        FD_CLR(socket, &socketSet);
+    } else {
+        printf("%s\n", buffer);
+        return parseHttpRequest(buffer);
+    }
 }
 
-void processGetRequest(int socket) {
+void HttpServer::processGetRequest(int socket) {
     map<string, string> httpRequest = getHttpRequest(socket);
-    string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
-    sendHttpResponseHeader(fileName, socket);
-    sendFile(fileName, socket);
+    if (!FD_ISSET(socket, &socketSet)) return;
+    if (httpRequest["Method"] == "GET") {
+        string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
+        sendHttpResponseHeader(fileName, socket);
+        sendFile(fileName, socket);
+    } else {
+        // printf("Invalid method closing socket\n");
+        // close(socket);
+        // FD_CLR(socket, &socketSet);
+    }
 }
 
-void exit_routine()
+void exitRoutine()
 {
 	printf("Ending...\n");
 }
 
-int main()
-{
-    atexit(exit_routine);
-
+void HttpServer::setConfigs() {
+    atexit(exitRoutine);
     signal(SIGINT, exit);
 	signal(SIGKILL, exit);
 	signal(SIGQUIT, exit);
+}
 
-    int masterSocket, client_fd; long valread;
-    vector<int> clientSockets;
-    fd_set socketSet;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    int option = 1;
-    int maxFileDescriptor;
-    
+HttpServer::HttpServer() {
+    setConfigs();
+}
+
+void HttpServer::Start() {
     // Creating socket file descriptor
     if ((masterSocket = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
@@ -183,7 +215,6 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    int backlog = 10;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
     if (listen(masterSocket, backlog) < 0)
     {
         perror("In listen");
@@ -191,8 +222,10 @@ int main()
     }
 
     printf("\n------------ Server Running on Port 8080 ------------\n\n");
-    while(1)
-    {
+}
+
+void HttpServer::Listen() {
+    while(true) {
         //  zera todo conjunto de sockets. Este conjunto é usado para monitorar os clientes conectados
 		FD_ZERO(&socketSet);
 
@@ -245,18 +278,8 @@ int main()
                 processGetRequest(c);
 			}
         }
-
-        // if ((client_fd = accept(masterSocket, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
-        // {
-        //     perror("In accept");
-        //     exit(EXIT_FAILURE);
-        // }
-
-        // processGetRequest(client_fd);
     }
 
     // O desejado eh que o cliente feche a sua conexao automaticamente
-    close(client_fd);
     close(masterSocket);
-    return 0;
 }
