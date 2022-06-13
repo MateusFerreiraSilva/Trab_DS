@@ -9,9 +9,11 @@ Objects: HttpServer.o Main.o
 HttpServer: Objects
 	g++ -o HttpServer *.o
 
-run: HttpServer
+Rebuild: Clean HttpServer
+
+Run: HttpServer
 	./HttpServer
 
-clean:
+Clean:
 	rm *.o	
 	rm HttpServer

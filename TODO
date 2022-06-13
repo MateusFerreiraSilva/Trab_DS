@@ -3,3 +3,7 @@ Reponder com código http adequado (200, 400, 500, 401)
 Não deixar o server quebrar caso o arquivo não exista
 O que devo retorna ser nao tenho a extensao
 Erro a fechar conexão do cliente
+Fechar master socket
+Talvez usar recv and send reduza nossos problemas de seg fault
+http://stefan.buettcher.org/cs/conn_closed.html#:~:text=The%20most%20obvious%20way%20to,the%20connection%20has%20been%20closed.
+Acredito que o fato de ser multi thread trava o servidor com multiplas solicitação de conexão ao mesmo tempo

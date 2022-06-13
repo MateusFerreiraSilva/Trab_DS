@@ -21,13 +21,13 @@ using namespace std;
 class HttpServer {
     private:
         int masterSocket;
-        vector<int> clientSockets;
+        set<int> clientSockets;
         fd_set socketSet;
         struct sockaddr_in address;
         int addrlen = sizeof(address);
         int option = 1;
         int maxFileDescriptor;
-        int backlog = 10;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
+        int backlog = 50;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
         char* httpRequestBuffer[MAX_HTTP_GET_MESSAGE_SIZE];
 
         void setConfigs();
@@ -40,6 +40,11 @@ class HttpServer {
         string getExtension(string fileName);
         void sendFile(string fileName, int socket);
         ulong getFileSize(string fileName);
+        void checkForClientDisconnections();
+        void acceptConnections();
+        int getMaxFileDescriptor();
+        void processRequests();
+
     public:
         /*
             Http does not limit the size of a GET request, but most of the browser have a limit between 2K~8K bytes.
@@ -47,6 +52,8 @@ class HttpServer {
         HttpServer();
         void Start();
         void Listen();
+
+        static void ExitRoutine();
 };
 
 #endif

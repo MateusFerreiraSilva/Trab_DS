@@ -44,7 +44,7 @@ void HttpServer::sendFile(string fileName, int socket)
             exit(EXIT_FAILURE);
         }
 
-        sentChunkSize = write(socket, buffer, chunkSize);
+        sentChunkSize = send(socket, buffer, chunkSize, 0);
 		if (sentChunkSize == -1) {
             perror("Error sending chunk of a file");
             exit(EXIT_FAILURE);
@@ -89,26 +89,6 @@ vector<string> HttpServer::split(const char *str, const char delimiter) {
     return tokens;
 }
 
-// map<string, string> HttpServer::parseHttpRequest(char *buffer) {
-//     vector<string> lines = split(buffer, '\n');
-//     int sz = lines.size();
-//     if (sz > 0) {
-//         vector<vector<string>> words(lines.size());
-//         for (int i = 0; i < lines.size(); i++) {
-//             words[i] = split(lines[i].c_str(), ' ');
-//         }
-//         map<string, string> httpRequest = {
-//             {"Method", words[0][0]},
-//             {"Url", words[0][1]},
-//             {"Protocol Version", words[0][2]},
-//             {"Host", words[1][0]},
-//             {"User-Agent", words[2][0]},
-//         };
-//         return httpRequest;
-//     }
-//     return map<string, string>();
-// }
-
 map<string, string> HttpServer::parseHttpRequest(char *buffer) {
     vector<string> lines = split(buffer, '\n');
     vector<vector<string>> words(lines.size());
@@ -143,43 +123,33 @@ map<string, string> HttpServer::parseHttpRequest(char *buffer) {
 
 map<string, string> HttpServer::getHttpRequest(int socket) {
     /*TO DO Loop de leitura para arquivo grandes*/
-    // char *buffer = *httpRequestBuffer;
+    map<string, string> httpRequest;
     char buffer[MAX_HTTP_GET_MESSAGE_SIZE];
-    int httpRequestSize = read(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE);
-    if (httpRequestSize < 0) {
-        perror("Error while reading http request");
-        exit(EXIT_FAILURE);
-    } else if (httpRequestSize == 0) {
-        printf("Invalid method closing socket\n");
-        close(socket);
-        FD_CLR(socket, &socketSet);
-    } else {
+    int httpRequestSize = recv(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE, 0);
+    if (httpRequestSize > 0) {
         printf("%s\n", buffer);
-        return parseHttpRequest(buffer);
+        httpRequest = parseHttpRequest(buffer);
     }
+
+    return httpRequest;
 }
 
 void HttpServer::processGetRequest(int socket) {
     map<string, string> httpRequest = getHttpRequest(socket);
-    if (!FD_ISSET(socket, &socketSet)) return;
-    if (httpRequest["Method"] == "GET") {
+    if (!httpRequest.empty() && httpRequest["Method"] == "GET") {
         string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
         sendHttpResponseHeader(fileName, socket);
         sendFile(fileName, socket);
-    } else {
-        // printf("Invalid method closing socket\n");
-        // close(socket);
-        // FD_CLR(socket, &socketSet);
     }
 }
 
-void exitRoutine()
+void HttpServer::ExitRoutine()
 {
 	printf("Ending...\n");
 }
 
 void HttpServer::setConfigs() {
-    atexit(exitRoutine);
+    atexit(ExitRoutine);
     signal(SIGINT, exit);
 	signal(SIGKILL, exit);
 	signal(SIGQUIT, exit);
@@ -224,24 +194,63 @@ void HttpServer::Start() {
     printf("\n------------ Server Running on Port 8080 ------------\n\n");
 }
 
+void HttpServer::checkForClientDisconnections() {
+    vector<int> sockets(clientSockets.size());
+    copy(clientSockets.begin(), clientSockets.end(), sockets.begin());
+
+    for (auto socket : sockets) {
+        /*Check if the client has disconnected*/
+        if (recv(socket, NULL, 0, MSG_PEEK | MSG_DONTWAIT) == 0) {
+            printf("\nDisconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+            FD_CLR(socket, &socketSet);
+            clientSockets.erase(socket);
+            close(socket);
+        }
+    }
+}
+
+void HttpServer::acceptConnections() {
+    // se há atividade no socket do servidor é um solicitação de conexão de um cliente
+    if (FD_ISSET(masterSocket, &socketSet)) {
+         // aceita a conexão no socket do servidor e cria um novo socket
+        int socket = accept(masterSocket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+        if (socket > 0)
+        {
+            printf("\nNew connection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+            FD_SET(socket, &socketSet);
+            clientSockets.insert(socket); // adiciona o socket na lista de clientes
+        } else {
+            printf("Error acception new connection...\n");
+        }
+    }
+}
+
+int HttpServer::getMaxFileDescriptor() {
+    int maxFD = masterSocket;
+    for (auto socket : clientSockets) {
+        maxFD = max(maxFD, socket);
+    }
+
+    return maxFD;
+}
+
+void HttpServer::processRequests() {
+    for (auto c : clientSockets)
+    {
+        // se há atividade no socket do clientes conectados, então é uma requisição http
+        if (FD_ISSET(c, &socketSet))
+        {
+            processGetRequest(c);
+        }
+    }
+}
+
 void HttpServer::Listen() {
+	FD_ZERO(&socketSet);
+	FD_SET(masterSocket, &socketSet);
+
     while(true) {
-        //  zera todo conjunto de sockets. Este conjunto é usado para monitorar os clientes conectados
-		FD_ZERO(&socketSet);
-
-		// coloca o socket do servidor(masterSocket) no conjunto
-		FD_SET(masterSocket, &socketSet);
-		maxFileDescriptor = masterSocket;
-
-        // para cada cliente conectado, adiciona o socket do client no conjunto de sockets
-		for (auto c : clientSockets)
-		{
-			if (c > 0) // verifica se o cliente está conectado.
-				FD_SET(c, &socketSet);
-
-			if (c > maxFileDescriptor) // guarda o número do maior file descriptor, usado no select
-				maxFileDescriptor = c;
-		}
+        maxFileDescriptor = getMaxFileDescriptor();
 
         // bloqueia esperando atividade em pelo menos um dos sockets
 		int activity = select(maxFileDescriptor + 1, &socketSet, NULL, NULL, NULL);
@@ -254,32 +263,10 @@ void HttpServer::Listen() {
 			continue;
 		}
 
-        // se há atividade no socket do servidor é um solicitação de conexão de um cliente
-		if (FD_ISSET(masterSocket, &socketSet))
-		{
-            int newSocket;
-			// aceita a conexão no socket do servidor e cria um novo socket
-			if ((newSocket = accept(masterSocket, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
-			{
-				perror("accept");
-				exit(EXIT_FAILURE);
-			}
+        acceptConnections();
 
-			printf("\nNew connection , socket fd is %d , ip is : %s , port : %d \n", newSocket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        processRequests();
 
-            clientSockets.push_back(newSocket); // adiciona o socket na lista de clientes
-		}
-
-        for (auto c : clientSockets)
-		{
-			// se há atividade no socket do clientes conectados, então é uma solicitação de comando
-			if (FD_ISSET(c, &socketSet))
-			{
-                processGetRequest(c);
-			}
-        }
+        checkForClientDisconnections();
     }
-
-    // O desejado eh que o cliente feche a sua conexao automaticamente
-    close(masterSocket);
 }
