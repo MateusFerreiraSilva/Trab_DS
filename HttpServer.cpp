@@ -105,22 +105,6 @@ map<string, string> HttpServer::parseHttpRequest(char *buffer) {
     return httpRequest;
 }
 
-// map<string, string> HttpServer::getHttpRequest(int socket) {
-//     /*TO DO Loop de leitura para arquivo grandes*/
-//     char *buffer = *httpRequestBuffer;
-//     int httpRequestSize = read(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE);
-//     if (httpRequestSize < 0) {
-//         perror("Error while reading http request");
-//         exit(EXIT_FAILURE);
-//     } else if (httpRequestSize == 0) {
-//         perror("Request is null lol");
-//         exit(EXIT_FAILURE);
-//     } else {
-//         printf("%s\n", buffer);
-//         return parseHttpRequest(buffer);
-//     }
-// }
-
 map<string, string> HttpServer::getHttpRequest(int socket) {
     /*TO DO Loop de leitura para arquivo grandes*/
     map<string, string> httpRequest;
@@ -129,8 +113,11 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
     if (httpRequestSize > 0) {
         printf("%s\n", buffer);
         httpRequest = parseHttpRequest(buffer);
+    } else if (httpRequestSize == 0) {
+       disconnectClient(socket);
+    } else {
+        perror("Error reading GET Method");
     }
-
     return httpRequest;
 }
 
@@ -194,79 +181,70 @@ void HttpServer::Start() {
     printf("\n------------ Server Running on Port 8080 ------------\n\n");
 }
 
-void HttpServer::checkForClientDisconnections() {
-    vector<int> sockets(clientSockets.size());
-    copy(clientSockets.begin(), clientSockets.end(), sockets.begin());
-
-    for (auto socket : sockets) {
-        /*Check if the client has disconnected*/
-        if (recv(socket, NULL, 0, MSG_PEEK | MSG_DONTWAIT) == 0) {
-            printf("\nDisconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-            FD_CLR(socket, &socketSet);
-            clientSockets.erase(socket);
-            close(socket);
-        }
-    }
+void HttpServer::disconnectClient(int socket) {
+    // printf("\nDisconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+    FD_CLR(socket, &socketSet);
+    clientSockets.erase(socket);
+    close(socket);
 }
 
 void HttpServer::acceptConnections() {
     // se há atividade no socket do servidor é um solicitação de conexão de um cliente
+    
+
+    // sus code (sus if)
     if (FD_ISSET(masterSocket, &socketSet)) {
-         // aceita a conexão no socket do servidor e cria um novo socket
-        int socket = accept(masterSocket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-        if (socket > 0)
-        {
-            printf("\nNew connection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-            FD_SET(socket, &socketSet);
-            clientSockets.insert(socket); // adiciona o socket na lista de clientes
-        } else {
-            printf("Error acception new connection...\n");
+        struct sockaddr_in clientAddress;
+        int clientAddrlen = sizeof(clientAddress);
+        int socket = accept(masterSocket, (struct sockaddr *)&clientAddress, (socklen_t *)&clientAddrlen);
+        printf("\nNew connection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(clientAddress.sin_addr), ntohs(clientAddress.sin_port));
+        if (socket < 0) {
+            perror("Error acception connection");
         }
+        FD_SET(socket, &socketSet);
+        clientSockets.insert(socket); // adiciona o socket na lista de clientes
     }
 }
 
 int HttpServer::getMaxFileDescriptor() {
     int maxFD = masterSocket;
-    for (auto socket : clientSockets) {
-        maxFD = max(maxFD, socket);
+    if (!clientSockets.empty()) {
+        maxFD = max(maxFD, *clientSockets.rbegin());
     }
 
     return maxFD;
 }
 
 void HttpServer::processRequests() {
-    for (auto c : clientSockets)
+    vector<int> sockets(clientSockets.size());
+    copy(clientSockets.begin(), clientSockets.end(), sockets.begin());
+    for (auto socket : sockets)
     {
         // se há atividade no socket do clientes conectados, então é uma requisição http
-        if (FD_ISSET(c, &socketSet))
+        if (FD_ISSET(socket, &socketSet))
         {
-            processGetRequest(c);
+            processGetRequest(socket);
         }
     }
 }
 
 void HttpServer::Listen() {
 	FD_ZERO(&socketSet);
-	FD_SET(masterSocket, &socketSet);
 
     while(true) {
+	    FD_SET(masterSocket, &socketSet);
         maxFileDescriptor = getMaxFileDescriptor();
 
         // bloqueia esperando atividade em pelo menos um dos sockets
 		int activity = select(maxFileDescriptor + 1, &socketSet, NULL, NULL, NULL);
-		
-        // sus code
-        if ((activity < 0) && (errno != EINTR))
-		{
-			// printf("select error");
-			// sleep(1);
-			continue;
-		}
+        puts("here\n");
 
-        acceptConnections();
+        if (activity > 0) {
+            acceptConnections();
+            processRequests();
+        } else if (activity < 0) {
+            perror("Error on select");
+        }
 
-        processRequests();
-
-        checkForClientDisconnections();
     }
 }

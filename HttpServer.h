@@ -40,7 +40,7 @@ class HttpServer {
         string getExtension(string fileName);
         void sendFile(string fileName, int socket);
         ulong getFileSize(string fileName);
-        void checkForClientDisconnections();
+        void disconnectClient(int socket);
         void acceptConnections();
         int getMaxFileDescriptor();
         void processRequests();
