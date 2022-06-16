@@ -2,8 +2,8 @@
 
 int main()
 {    
-    HttpServer *server = new HttpServer();
-    server->Start();
-    server->Listen();
+    HttpServer::start();
+    HttpServer::run();
+    
     return 0;
 }

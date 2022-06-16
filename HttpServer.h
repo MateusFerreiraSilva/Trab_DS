@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <arpa/inet.h>
 
-using namespace std;
+#include "ThreadPool.h"
 
 #ifndef HTTP_SERVER
 #define HTTP_SERVER
@@ -20,40 +20,40 @@ using namespace std;
 
 class HttpServer {
     private:
-        int masterSocket;
-        set<int> clientSockets;
-        fd_set socketSet;
-        struct sockaddr_in address;
-        int addrlen = sizeof(address);
-        int option = 1;
-        int maxFileDescriptor;
-        int backlog = 50;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
-        char* httpRequestBuffer[MAX_HTTP_GET_MESSAGE_SIZE];
+        inline static int masterSocket;
+        inline static set<int> clientSockets;
+        inline static fd_set socketSet;
+        inline static struct sockaddr_in address;
+        inline static const int addrlen = sizeof(address);
+        inline static const int option = 1;
+        inline static int maxFileDescriptor;
+        inline static const int backlog = 50;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
+        inline static char* httpRequestBuffer[MAX_HTTP_GET_MESSAGE_SIZE];
+        inline static ThreadPool *threadPool;
 
-        void setConfigs();
-        void processGetRequest(int socket);
-        map<string, string> getHttpRequest(int socket);
-        map<string, string> parseHttpRequest(char *buffer);
-        vector<string> split(const char *str, const char delimiter);
-        void sendHttpResponseHeader(string fileName, int socket);
-        string getFileType(string fileName);
-        string getExtension(string fileName);
-        void sendFile(string fileName, int socket);
-        ulong getFileSize(string fileName);
-        void disconnectClient(int socket);
-        void acceptConnections();
-        int getMaxFileDescriptor();
-        void processRequests();
+        static void setConfigs();
+        static void processGetRequest(int socket);
+        static map<string, string> getHttpRequest(int socket);
+        static map<string, string> parseHttpRequest(char *buffer);
+        static vector<string> split(const char *str, const char delimiter);
+        static void sendHttpResponseHeader(string fileName, int socket);
+        static string getFileType(string fileName);
+        static string getExtension(string fileName);
+        static void sendFile(string fileName, int socket);
+        static ulong getFileSize(string fileName);
+        static void disconnectClient(int socket);
+        static void acceptConnections();
+        static int getMaxFileDescriptor();
+        static void processRequests();
 
     public:
         /*
             Http does not limit the size of a GET request, but most of the browser have a limit between 2K~8K bytes.
         */
-        HttpServer();
-        void Start();
-        void Listen();
+        static void start();
+        static void run();
 
-        static void ExitRoutine();
+        static void exitRoutine();
 };
 
 #endif

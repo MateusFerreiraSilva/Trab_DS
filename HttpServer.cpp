@@ -1,15 +1,5 @@
 #include "HttpServer.h"
 
-class HttpRequest {
-public:
-    string method;
-    string url;
-    string httpVersion;
-    string host;
-    string userAgent;
-    string accept;
-};
-
 ulong HttpServer::getFileSize(string fileName)
 {
     struct stat fileInfo;
@@ -73,8 +63,8 @@ string HttpServer::getFileType(string fileName) {
 void HttpServer::sendHttpResponseHeader(string fileName, int socket) {
     long fileSize = getFileSize(fileName);
     string str = "HTTP/1.1 200 OK\nContent-Type: " + getFileType(fileName) + "\nContent-Length: " +  to_string(fileSize) + "\n\n";
-    write(socket , str.c_str() , (int)str.size());
-    // send(socket, str.c_str(), (int)str.size(), 0);
+    // write(socket , str.c_str() , (int)str.size());
+    send(socket, str.c_str(), (int)str.size(), 0);
 }
 
 vector<string> HttpServer::split(const char *str, const char delimiter) {
@@ -111,7 +101,7 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
     char buffer[MAX_HTTP_GET_MESSAGE_SIZE];
     int httpRequestSize = recv(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE, 0);
     if (httpRequestSize > 0) {
-        printf("%s\n", buffer);
+        // printf("%s\n", buffer);
         httpRequest = parseHttpRequest(buffer);
     } else if (httpRequestSize == 0) {
        disconnectClient(socket);
@@ -122,6 +112,7 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
 }
 
 void HttpServer::processGetRequest(int socket) {
+    cout << "Processing Http Request To Socket: " << socket << endl;
     map<string, string> httpRequest = getHttpRequest(socket);
     if (!httpRequest.empty() && httpRequest["Method"] == "GET") {
         string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
@@ -130,23 +121,24 @@ void HttpServer::processGetRequest(int socket) {
     }
 }
 
-void HttpServer::ExitRoutine()
+void HttpServer::exitRoutine()
 {
-	printf("Ending...\n");
+	printf("Stopping Http Server...\n");
+    threadPool->stop();
 }
 
 void HttpServer::setConfigs() {
-    atexit(ExitRoutine);
+    atexit(exitRoutine);
     signal(SIGINT, exit);
 	signal(SIGKILL, exit);
 	signal(SIGQUIT, exit);
 }
 
-HttpServer::HttpServer() {
+void HttpServer::start() {
     setConfigs();
-}
+    threadPool = new ThreadPool();
+    threadPool->start();
 
-void HttpServer::Start() {
     // Creating socket file descriptor
     if ((masterSocket = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
@@ -223,12 +215,13 @@ void HttpServer::processRequests() {
         // se há atividade no socket do clientes conectados, então é uma requisição http
         if (FD_ISSET(socket, &socketSet))
         {
-            processGetRequest(socket);
+            threadPool->queueJob(processGetRequest, socket);
+            // processGetRequest(socket);
         }
     }
 }
 
-void HttpServer::Listen() {
+void HttpServer::run() {
 	FD_ZERO(&socketSet);
 
     while(true) {
@@ -237,7 +230,7 @@ void HttpServer::Listen() {
 
         // bloqueia esperando atividade em pelo menos um dos sockets
 		int activity = select(maxFileDescriptor + 1, &socketSet, NULL, NULL, NULL);
-        puts("here\n");
+        puts("select\n");
 
         if (activity > 0) {
             acceptConnections();

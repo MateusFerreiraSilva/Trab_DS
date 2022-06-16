@@ -1,13 +1,16 @@
+ThreadPool.o:	
+	g++ -c -g -std=c++17 ThreadPool.cpp 
+
 HttpServer.o:
-	g++ -c -g HttpServer.cpp
+	g++ -c -g -std=c++17 HttpServer.cpp
 
 Main.o:
-	g++ -c -g Main.cpp
+	g++ -c -g -std=c++17 Main.cpp
 
-Objects: HttpServer.o Main.o
+Objects: ThreadPool.o HttpServer.o Main.o
 
 HttpServer: Objects
-	g++ -o HttpServer *.o
+	g++ -o HttpServer *.o -lpthread
 
 Rebuild: Clean HttpServer
 
