@@ -17,16 +17,14 @@
 
 #define PORT 8080
 #define MAX_HTTP_GET_MESSAGE_SIZE 8192
+#define MAX_CLIENTS 5000
 
 class HttpServer {
     private:
         inline static int masterSocket;
-        inline static set<int> clientSockets;
-        inline static fd_set socketSet;
         inline static struct sockaddr_in address;
         inline static const int addrlen = sizeof(address);
         inline static const int option = 1;
-        inline static int maxFileDescriptor;
         inline static const int backlog = 50;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
         inline static char* httpRequestBuffer[MAX_HTTP_GET_MESSAGE_SIZE];
         inline static ThreadPool *threadPool;
@@ -42,9 +40,8 @@ class HttpServer {
         static void sendFile(string fileName, int socket);
         static ulong getFileSize(string fileName);
         static void disconnectClient(int socket);
-        static void acceptConnections();
-        static int getMaxFileDescriptor();
-        static void processRequests();
+        static int acceptConnection(); // return socket with new connection
+        static void queueRequest(int socket);
 
     public:
         /*
