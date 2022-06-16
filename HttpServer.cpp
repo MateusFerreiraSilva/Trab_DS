@@ -85,12 +85,16 @@ map<string, string> HttpServer::parseHttpRequest(char *buffer) {
     for (int i = 0; i < lines.size(); i++) {
         words[i] = split(lines[i].c_str(), ' ');
     }
+    // map<string, string> httpRequest = {
+    //     {"Method", words[0][0]},
+    //     {"Url", words[0][1]},
+    //     {"Protocol Version", words[0][2]},
+    //     {"Host", words[1][0]},
+    //     {"User-Agent", words[2][0]},
+    // };
     map<string, string> httpRequest = {
         {"Method", words[0][0]},
-        {"Url", words[0][1]},
-        {"Protocol Version", words[0][2]},
-        {"Host", words[1][0]},
-        {"User-Agent", words[2][0]},
+        {"Url", words[0][1]}
     };
     return httpRequest;
 }
@@ -112,19 +116,23 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
 }
 
 void HttpServer::processGetRequest(int socket) {
-    cout << "Processing Http Request To Socket: " << socket << endl;
-    map<string, string> httpRequest;
-    while (true) {
-        httpRequest = getHttpRequest(socket);
-        if (!httpRequest.empty() && httpRequest["Method"] == "GET") {
-            string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
-            sendHttpResponseHeader(fileName, socket);
-            sendFile(fileName, socket);
-        } else {
-            break;
+    printf("Processing Http Request To Socket: %d\n", socket);
+    try {
+        map<string, string> httpRequest;
+        while (true) {
+            httpRequest = getHttpRequest(socket);
+            if (!httpRequest.empty() && httpRequest["Method"] == "GET") {
+                string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
+                sendHttpResponseHeader(fileName, socket);
+                sendFile(fileName, socket);
+            } else {
+                break;
+            }
         }
+    } catch (...) {
+       printf("Something went wrong processing http request\n");
     }
-    cout << "Request was completed" << endl;
+    printf("Request was completed\n");
 }
 
 void HttpServer::exitRoutine()
@@ -146,13 +154,14 @@ void HttpServer::start() {
     threadPool->start();
 
     // Creating socket file descriptor
-    if ((masterSocket = socket(AF_INET, SOCK_STREAM, 0)) == 0)
+    if ((serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
     {
         perror("In socket");
         exit(EXIT_FAILURE);
     }
 
-    if (setsockopt(masterSocket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0) {
+    int option = 1;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0) {
         perror("Erro while setting master socket options");
 		exit(EXIT_FAILURE);
     }
@@ -163,14 +172,13 @@ void HttpServer::start() {
     
     memset(address.sin_zero, '\0', sizeof address.sin_zero);
     
-    
-    if (bind(masterSocket, (struct sockaddr *)&address, sizeof(address)) < 0)
+    if (bind(serverSocket, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         perror("In bind");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(masterSocket, backlog) < 0)
+    if (listen(serverSocket, backlog) < 0)
     {
         perror("In listen");
         exit(EXIT_FAILURE);
@@ -187,7 +195,7 @@ void HttpServer::disconnectClient(int socket) {
 int HttpServer::acceptConnection() {
     struct sockaddr_in clientAddress;
     int clientAddrlen = sizeof(clientAddress);
-    int socket = accept(masterSocket, (struct sockaddr *)&clientAddress, (socklen_t *)&clientAddrlen);
+    int socket = accept(serverSocket, (struct sockaddr *)&clientAddress, (socklen_t *)&clientAddrlen);
     printf("\nNew connection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(clientAddress.sin_addr), ntohs(clientAddress.sin_port));
     if (socket < 0) {
         perror("Error acception connection");

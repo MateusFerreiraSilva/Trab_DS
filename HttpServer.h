@@ -21,12 +21,9 @@
 
 class HttpServer {
     private:
-        inline static int masterSocket;
+        inline static int serverSocket;
         inline static struct sockaddr_in address;
-        inline static const int addrlen = sizeof(address);
-        inline static const int option = 1;
-        inline static const int backlog = 50;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
-        inline static char* httpRequestBuffer[MAX_HTTP_GET_MESSAGE_SIZE];
+        inline static const int backlog = 10;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
         inline static ThreadPool *threadPool;
 
         static void setConfigs();
