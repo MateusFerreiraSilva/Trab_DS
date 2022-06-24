@@ -15,7 +15,7 @@
 #ifndef HTTP_SERVER
 #define HTTP_SERVER
 
-#define PORT 8080
+#define PORT 8082
 #define MAX_CLIENTS 5000
 // limit the http request max size
 #define MAX_HTTP_GET_MESSAGE_SIZE 1000 * 1024 * 2 // 2MB
@@ -26,6 +26,7 @@ class HttpServer {
         inline static struct sockaddr_in address;
         inline static const int backlog = 10;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
         inline static ThreadPool *threadPool;
+        inline static const int secondsToTimeout = 1;
 
         static void setConfigs();
         static void processHttpRequest(int socket);
@@ -46,6 +47,7 @@ class HttpServer {
         static void sendBadRequestResponse(int socket);
         static void sendOkResponseHeader(int socket, string fileName);
         static void sendOkResponse(int socket, string fileName);
+        static void setListenTimeout(int socket);
 
     public:
         /*

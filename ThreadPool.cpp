@@ -11,33 +11,37 @@ void ThreadPool::start() {
 }
 
 void ThreadPool::queueJob(void (*job)(int), int arg) {
+    queue_mutex.lock();
+    
     {
-        unique_lock<mutex> lock(queue_mutex);
         jobs.push(make_pair(job, arg));
     }
-    mutex_condition.notify_one();
+
+    queue_mutex.unlock();
 }
 
 void ThreadPool::stop() {
     printf("Stopping Threads");
-    {
-        unique_lock<mutex> lock(queue_mutex);
-        should_terminate = true;
-    }
-    mutex_condition.notify_all();
-    for (std::thread& active_thread : threads) {
+
+    should_terminate = true;
+
+    for (thread& active_thread : threads) {
         active_thread.join();
     }
+
     threads.clear();
+
     printf("Success Stopping Threads\n");
 }
 
 bool ThreadPool::busy() {
     bool poolbusy;
+    queue_mutex.lock();
     {
-        unique_lock<mutex> lock(queue_mutex);
         poolbusy = jobs.empty();
     }
+    queue_mutex.unlock();
+
     return poolbusy;
 }
 
@@ -49,26 +53,31 @@ void ThreadPool::threadLoop() {
     int arg;
 
     while (true) {
-        unique_lock<mutex> lock(queue_mutex);
-        mutex_condition.wait(lock, [this] {
-            return !jobs.empty() || should_terminate;
-        });
-        if (should_terminate) {
-            return;
+        hasJob = false;
+
+        queue_mutex.lock();
+        
+        {
+            if (should_terminate) {
+                queue_mutex.unlock();
+                return;
+            }
+
+            if (!jobs.empty()) {
+                pair<void(*)(int), int> newJob = jobs.front();
+                job = newJob.first;
+                arg = newJob.second;
+                jobs.pop();
+                hasJob = true;
+            }
         }
 
-        if (!jobs.empty()) {
-            job = jobs.front().first;
-            arg = jobs.front().second;
-            jobs.pop();
-            hasJob = true;
-        }
+        queue_mutex.unlock();
         
         if (hasJob) {
             cout << "##### Thread " << this_thread::get_id() << " Gonna do the job #####" << endl;
             (*job)(arg); // do job
             cout << "++++++ Thread " << this_thread::get_id() << " Has Done the job ++++++" << endl;
-            hasJob = false;
         }
     }
 }

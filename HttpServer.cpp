@@ -157,18 +157,20 @@ map<string, string> HttpServer::parseHttpRequest(char *buffer) {
 }
 
 map<string, string> HttpServer::getHttpRequest(int socket) {
-    char buffer[MAX_HTTP_GET_MESSAGE_SIZE];
-    // TO DO alterar para malloc
+    char buffer[MAX_HTTP_GET_MESSAGE_SIZE]; // TO DO alterar para malloc
     map<string, string> httpRequest;
 
+    // morre aqui no caso do navegador, como navegador não manda nada a thread fica aqui esperando...
     int httpRequestSize = recv(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE, 0);
     if (httpRequestSize > 0) {
         // printf("%s\n", buffer);
         httpRequest = parseHttpRequest(buffer);
-    } else if (httpRequestSize == 0) {
-       disconnectClient(socket);
-    } else {
-        perror("Error reading GET Method");
+    } else if (httpRequestSize <= 0) {
+        if (httpRequestSize == -1) {
+            perror("Disconnecting becausa a error or a timeout\n");
+        }
+
+        disconnectClient(socket);
     }
 
     return httpRequest;
@@ -177,11 +179,11 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
 void HttpServer::processHttpRequest(int socket) {
     printf("Processing Http Request To Socket: %d\n", socket);
     try {
+        setListenTimeout(socket);
         map<string, string> httpRequest;
         while (true) {
             httpRequest = getHttpRequest(socket);
             if (httpRequest.empty()) {
-                printf("Client ending connection...\n");
                 break;
             }
             else if (httpRequest["Method"] == "GET") {
@@ -201,6 +203,13 @@ void HttpServer::exitRoutine()
 {
 	printf("Stopping Http Server...\n");
     threadPool->stop();
+}
+
+void HttpServer::setListenTimeout(int socket) {
+    struct timeval tv;
+    tv.tv_sec = secondsToTimeout;
+    tv.tv_usec = 0;
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 }
 
 void HttpServer::setConfigs() {
@@ -250,7 +259,7 @@ void HttpServer::start() {
 }
 
 void HttpServer::disconnectClient(int socket) {
-    printf("\nDisconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+    printf("Disconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
     close(socket);
 }
 

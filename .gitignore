@@ -4,3 +4,4 @@ a.out
 *.o
 HttpServer
 *.dat
+input.txt

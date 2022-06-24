@@ -10,7 +10,6 @@ class ThreadPool  {
         int num_threads;
         bool should_terminate = false;        // Tells threads to stop looking for jobs
         mutex queue_mutex;                   // Prevents data races to the job queue
-        condition_variable mutex_condition; // Allows threads to wait on new jobs or termination 
         vector<thread> threads;
         queue<pair<void(*)(int), int>> jobs;
 
