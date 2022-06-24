@@ -4,21 +4,25 @@
 // TO DO garantir que a conexão seja fechada se não minha thread fica travada (ex: contador de erro quando recv retorna 0, ou seja recv pode retorna 0 no max N vezes se não o processo é encerrado)
 // TO DO programa trava depois de um http
 
+bool HttpServer::doesFileExist(string fileName) {
+    return access(fileName.c_str(), F_OK) != -1;
+}
+
 ulong HttpServer::getFileSize(string fileName)
 {
     struct stat fileInfo;
-
     int fd = open(fileName.c_str(), O_RDONLY);
     if (fd == -1 || fstat(fd, &fileInfo) == -1) {
         perror("Error while getting file size");
         exit(EXIT_FAILURE);
+    } else {
+        close(fd);
     }
-    close(fd);
 
     return fileInfo.st_size;
 }
 
-void HttpServer::sendFile(string fileName, int socket)
+void HttpServer::sendFile(int socket, string fileName)
 {
     const int bufferSize = 32767; // max send size, default limit of send system call
     char buffer[bufferSize];
@@ -56,27 +60,68 @@ string HttpServer::getExtension(string fileName) {
 string HttpServer::getFileType(string fileName) {
     string extension = getExtension(fileName);
     const map<string, string> typeByExtensions = {
+        {"txt", "txt/plain"},
         {"html", "text/html"},
-        {"png", "image/png"},
+        {"css", "text/css"},
         {"js", "text/javascript"},
-        {"ico", "image/vnd.microsoft.icon"}
+        {"ico", "image/vnd.microsoft.icon"},
+        {"json", "application/json"},
+        {"csv", "text/csv"},
+        {"xml", "application/xml"},
+        {"pdf", "application/pdf"},
+        {"png", "image/png"},
+        {"jpeg", "image/jpeg"},
+        {"jpg", "image/jpeg"}
     };
-    // if not found
-    if (typeByExtensions.find(extension) == typeByExtensions.end())
+    
+    if (typeByExtensions.find(extension) == typeByExtensions.end()) // if extension was not found
         return "application/octet-stream"; // see RFC2616
 
     return typeByExtensions.at(extension);
 }
 
-void HttpServer::buildHttpResponse() {
-    
+void HttpServer::sendNotFoundResponse(int socket) {
+    string notFoundMessage = "Ops! This doesn't exist.";
+    string notFoundMessageSize = to_string(notFoundMessage.size());
+    string httpResponse = "HTTP/1.1 404 Not Found\nContent-Type: text/plain\nContent-Length: "
+                            + notFoundMessageSize + "\n\n"
+                            + notFoundMessage;
+
+    send(socket, httpResponse.c_str(), (int)httpResponse.size(), 0);
 }
 
-void HttpServer::sendHttpResponseHeader(string fileName, int socket) {
+void HttpServer::sendBadRequestResponse(int socket) {
+    string badRequestMessage = "400 Bad Request";
+    string badRequestMessageSize = to_string(badRequestMessage.size());
+    string httpResponse = "HTTP/1.1 400 Bad Request\nContent-Type: text/plain\nContent-Length: "
+                            + badRequestMessageSize + "\n\n"
+                            + badRequestMessage;
+
+    send(socket, httpResponse.c_str(), (int)httpResponse.size(), 0);
+}
+
+void HttpServer::sendOkResponseHeader(int socket, string fileName) {
     long fileSize = getFileSize(fileName);
-    string str = "HTTP/1.1 200 OK\nContent-Type: " + getFileType(fileName) + "\nContent-Length: " +  to_string(fileSize) + "\n\n";
-    // write(socket , str.c_str() , (int)str.size());
-    send(socket, str.c_str(), (int)str.size(), 0);
+    string httpResponse = "HTTP/1.1 200 OK\nContent-Type: "
+                            + getFileType(fileName)
+                            + "\nContent-Length: "
+                            +  to_string(fileSize)
+                            + "\n\n";
+
+    send(socket, httpResponse.c_str(), (int)httpResponse.size(), 0);
+}
+
+void HttpServer::sendOkResponse(int socket, string fileName) {
+    sendOkResponseHeader(socket, fileName);
+    sendFile(socket, fileName);
+}
+
+void HttpServer::sendHttpResponse(string fileName, int socket) {
+    if (doesFileExist(fileName)) {
+        sendOkResponse(socket, fileName);
+    } else {
+        sendNotFoundResponse(socket);
+    }
 }
 
 vector<string> HttpServer::split(const char *str, const char delimiter) {
@@ -112,9 +157,10 @@ map<string, string> HttpServer::parseHttpRequest(char *buffer) {
 }
 
 map<string, string> HttpServer::getHttpRequest(int socket) {
-    /*TO DO Loop de leitura para arquivo grandes*/
-    map<string, string> httpRequest;
     char buffer[MAX_HTTP_GET_MESSAGE_SIZE];
+    // TO DO alterar para malloc
+    map<string, string> httpRequest;
+
     int httpRequestSize = recv(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE, 0);
     if (httpRequestSize > 0) {
         // printf("%s\n", buffer);
@@ -124,21 +170,25 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
     } else {
         perror("Error reading GET Method");
     }
+
     return httpRequest;
 }
 
-void HttpServer::processGetRequest(int socket) {
+void HttpServer::processHttpRequest(int socket) {
     printf("Processing Http Request To Socket: %d\n", socket);
     try {
         map<string, string> httpRequest;
         while (true) {
             httpRequest = getHttpRequest(socket);
-            if (!httpRequest.empty() && httpRequest["Method"] == "GET") {
-                string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
-                sendHttpResponseHeader(fileName, socket);
-                sendFile(fileName, socket);
-            } else {
+            if (httpRequest.empty()) {
+                printf("Client ending connection...\n");
                 break;
+            }
+            else if (httpRequest["Method"] == "GET") {
+                string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
+                sendHttpResponse(fileName, socket);
+            } else {
+                sendBadRequestResponse(socket);
             }
         }
     } catch (...) {
@@ -212,11 +262,12 @@ int HttpServer::acceptConnection() {
     if (socket < 0) {
         perror("Error acception connection");
     }
+
     return socket;
 }
 
 void HttpServer::queueRequest(int socket) {
-    threadPool->queueJob(processGetRequest, socket);
+    threadPool->queueJob(processHttpRequest, socket);
 }
 
 void HttpServer::run() {
