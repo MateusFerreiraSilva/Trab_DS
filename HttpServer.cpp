@@ -1,5 +1,9 @@
 #include "HttpServer.h"
 
+// TO DO caso uma thread de erro não matar o programa
+// TO DO garantir que a conexão seja fechada se não minha thread fica travada (ex: contador de erro quando recv retorna 0, ou seja recv pode retorna 0 no max N vezes se não o processo é encerrado)
+// TO DO programa trava depois de um http
+
 ulong HttpServer::getFileSize(string fileName)
 {
     struct stat fileInfo;
@@ -9,6 +13,7 @@ ulong HttpServer::getFileSize(string fileName)
         perror("Error while getting file size");
         exit(EXIT_FAILURE);
     }
+    close(fd);
 
     return fileInfo.st_size;
 }
@@ -55,9 +60,16 @@ string HttpServer::getFileType(string fileName) {
         {"png", "image/png"},
         {"js", "text/javascript"},
         {"ico", "image/vnd.microsoft.icon"}
-    }; 
+    };
+    // if not found
+    if (typeByExtensions.find(extension) == typeByExtensions.end())
+        return "application/octet-stream"; // see RFC2616
 
     return typeByExtensions.at(extension);
+}
+
+void HttpServer::buildHttpResponse() {
+    
 }
 
 void HttpServer::sendHttpResponseHeader(string fileName, int socket) {
@@ -188,7 +200,7 @@ void HttpServer::start() {
 }
 
 void HttpServer::disconnectClient(int socket) {
-    // printf("\nDisconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+    printf("\nDisconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
     close(socket);
 }
 

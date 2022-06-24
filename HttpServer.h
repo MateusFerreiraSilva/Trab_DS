@@ -39,6 +39,7 @@ class HttpServer {
         static void disconnectClient(int socket);
         static int acceptConnection(); // return socket with new connection
         static void queueRequest(int socket);
+        static void buildHttpResponse();
 
     public:
         /*
