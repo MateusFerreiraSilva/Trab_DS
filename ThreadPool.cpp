@@ -1,29 +1,66 @@
 #include "ThreadPool.h"
 
+ThreadPool::ThreadPool() {
+    numThreads = 1000; // Max # of threads the system supports
+    // numThreads = thread::hardware_concurrency();
+    printf("Num threads: %d\n", numThreads);
+}
+
 void ThreadPool::start() {
     printf("Starting... thread pool\n");
-    num_threads = thread::hardware_concurrency(); // Max # of threads the system supports
-    printf("Num threads: %d\n", num_threads);
-    threads.resize(num_threads);
-    for (uint32_t i = 0; i < num_threads; i++) {
+    threads.resize(numThreads);
+    for (int i = 0; i < numThreads; i++) {
         threads.at(i) = thread(&ThreadPool::threadLoop, this);
     }
 }
 
+void ThreadPool::allocateResources() {
+    threadRecvBuffer[this_thread::get_id()] = (char*) malloc(threadRecvBufferSize * sizeof(char));
+    threadSendBuffer[this_thread::get_id()] = (char*) malloc(threadSendBufferSize * sizeof(char));
+}
+
+void ThreadPool::threadExit() {
+    // printf("Realising threads...\n");
+
+    if (threadRecvBuffer[this_thread::get_id()] != NULL) {
+        free(threadRecvBuffer[this_thread::get_id()]);
+    }
+    if (threadSendBuffer[this_thread::get_id()] != NULL)
+    {
+        free(threadSendBuffer[this_thread::get_id()]);
+    }
+}
+
 void ThreadPool::queueJob(void (*job)(int), int arg) {
-    queue_mutex.lock();
+    queueMutex.lock();
     
     {
         jobs.push(make_pair(job, arg));
     }
 
-    queue_mutex.unlock();
+    queueMutex.unlock();
+}
+
+char* ThreadPool::getRecvBuffer() {
+    return threadRecvBuffer[this_thread::get_id()];
+}
+
+int ThreadPool::getRecvBufferSize() {
+    return threadRecvBufferSize;
+}
+
+char* ThreadPool::getSendBuffer() {
+    return threadRecvBuffer[this_thread::get_id()];
+}
+
+int ThreadPool::getSendBufferSize() {
+    return threadSendBufferSize;
 }
 
 void ThreadPool::stop() {
     printf("Stopping Threads");
 
-    should_terminate = true;
+    shouldTerminate = true;
 
     for (thread& active_thread : threads) {
         active_thread.join();
@@ -36,18 +73,19 @@ void ThreadPool::stop() {
 
 bool ThreadPool::busy() {
     bool poolbusy;
-    queue_mutex.lock();
+    queueMutex.lock();
     {
         poolbusy = jobs.empty();
     }
-    queue_mutex.unlock();
+    queueMutex.unlock();
 
     return poolbusy;
 }
 
 void ThreadPool::threadLoop() {
-    cout << "-------Thread " << this_thread::get_id() << " has started-------\n" << endl;
-
+    // cout << "-------Thread " << this_thread::get_id() << " has started-------\n" << endl;
+    
+    allocateResources();
     bool hasJob;
     void (*job)(int);
     int arg;
@@ -55,11 +93,12 @@ void ThreadPool::threadLoop() {
     while (true) {
         hasJob = false;
 
-        queue_mutex.lock();
+        queueMutex.lock();
         
         {
-            if (should_terminate) {
-                queue_mutex.unlock();
+            if (shouldTerminate) {
+                queueMutex.unlock();
+                threadExit();
                 return;
             }
 
@@ -72,12 +111,12 @@ void ThreadPool::threadLoop() {
             }
         }
 
-        queue_mutex.unlock();
+        queueMutex.unlock();
         
         if (hasJob) {
-            cout << "##### Thread " << this_thread::get_id() << " Gonna do the job #####" << endl;
+            // cout << "##### Thread " << this_thread::get_id() << " Gonna do the job #####" << endl;
             (*job)(arg); // do job
-            cout << "++++++ Thread " << this_thread::get_id() << " Has Done the job ++++++" << endl;
+            // cout << "++++++ Thread " << this_thread::get_id() << " Has Done the job ++++++" << endl;
         }
     }
 }

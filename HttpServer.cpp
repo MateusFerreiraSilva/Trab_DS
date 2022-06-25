@@ -24,8 +24,8 @@ ulong HttpServer::getFileSize(string fileName)
 
 void HttpServer::sendFile(int socket, string fileName)
 {
-    const int bufferSize = 32767; // max send size, default limit of send system call
-    char buffer[bufferSize];
+    const int bufferSize = threadPool->getSendBufferSize();
+    char* buffer = threadPool->getSendBuffer();
     int chunkSize = 0, sentChunkSize = 0;
 
     int fd = open(fileName.c_str(), O_RDONLY);
@@ -125,17 +125,18 @@ void HttpServer::sendHttpResponse(string fileName, int socket) {
 }
 
 map<string, string> HttpServer::getHttpRequest(int socket) {
-    char buffer[MAX_HTTP_GET_MESSAGE_SIZE]; // TO DO alterar para malloc
+    int bufferSize = threadPool->getRecvBufferSize();
+    char* buffer = threadPool->getRecvBuffer();
     map<string, string> httpRequest;
 
     // morre aqui no caso do navegador, como navegador não manda nada a thread fica aqui esperando...
-    int httpRequestSize = recv(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE, 0);
+    int httpRequestSize = recv(socket , buffer, bufferSize, 0);
     if (httpRequestSize > 0) {
         // printf("%s\n", buffer);
         httpRequest = StringUtils::parseHttpRequest(buffer);
     } else if (httpRequestSize <= 0) {
         if (httpRequestSize == -1) {
-            perror("Disconnecting becausa a error or a timeout\n");
+            // perror("Disconnecting becausa a error or a timeout\n");
         }
 
         disconnectClient(socket);
@@ -145,7 +146,7 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
 }
 
 void HttpServer::processHttpRequest(int socket) {
-    printf("Processing Http Request To Socket: %d\n", socket);
+    // printf("Processing Http Request To Socket: %d\n", socket);
     try {
         setListenTimeout(socket);
         map<string, string> httpRequest;
@@ -164,7 +165,7 @@ void HttpServer::processHttpRequest(int socket) {
     } catch (...) {
        printf("Something went wrong processing http request\n");
     }
-    printf("Request was completed\n");
+    // printf("Request was completed\n");
 }
 
 void HttpServer::exitRoutine()
@@ -223,11 +224,11 @@ void HttpServer::start() {
         exit(EXIT_FAILURE);
     }
 
-    printf("\n------------ Server Running on Port 8080 ------------\n\n");
+    // printf("\n------------ Server Running on Port 8080 ------------\n\n");
 }
 
 void HttpServer::disconnectClient(int socket) {
-    printf("Disconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+    // printf("Disconnection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
     close(socket);
 }
 
@@ -235,7 +236,7 @@ int HttpServer::acceptConnection() {
     struct sockaddr_in clientAddress;
     int clientAddrlen = sizeof(clientAddress);
     int socket = accept(serverSocket, (struct sockaddr *)&clientAddress, (socklen_t *)&clientAddrlen);
-    printf("\nNew connection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(clientAddress.sin_addr), ntohs(clientAddress.sin_port));
+    // printf("\nNew connection , socket fd is %d , ip is : %s , port : %d \n", socket, inet_ntoa(clientAddress.sin_addr), ntohs(clientAddress.sin_port));
     if (socket < 0) {
         perror("Error acception connection");
     }
