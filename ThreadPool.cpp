@@ -1,7 +1,7 @@
 #include "ThreadPool.h"
 
 ThreadPool::ThreadPool() {
-    numThreads = 1000; // Max # of threads the system supports
+    numThreads = 100; // Max # of threads the system supports
     // numThreads = thread::hardware_concurrency();
     printf("Num threads: %d\n", numThreads);
 }
@@ -50,7 +50,7 @@ int ThreadPool::getRecvBufferSize() {
 }
 
 char* ThreadPool::getSendBuffer() {
-    return threadRecvBuffer[this_thread::get_id()];
+    return threadSendBuffer[this_thread::get_id()];
 }
 
 int ThreadPool::getSendBufferSize() {

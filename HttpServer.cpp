@@ -4,22 +4,46 @@
 // TO DO garantir que a conexão seja fechada se não minha thread fica travada (ex: contador de erro quando recv retorna 0, ou seja recv pode retorna 0 no max N vezes se não o processo é encerrado)
 // TO DO programa trava depois de um http
 
+int HttpServer::sendWithRetry(int socket, const char* buffer, int bufferSize) {
+
+    for (int i = 0; i < sendRetries; i++) {
+        int response = send(socket, buffer, bufferSize, 0);
+        if(response != -1) {
+            return response;
+        }
+    }
+
+    throw runtime_error("Error while sending file");
+}
+
 bool HttpServer::doesFileExist(string fileName) {
     return access(fileName.c_str(), F_OK) != -1;
 }
 
-ulong HttpServer::getFileSize(string fileName)
+long HttpServer::getFileSize(string fileName)
 {
     struct stat fileInfo;
     int fd = open(fileName.c_str(), O_RDONLY);
-    if (fd == -1 || fstat(fd, &fileInfo) == -1) {
-        perror("Error while getting file size");
-        exit(EXIT_FAILURE);
-    } else {
+    if (fd != -1) {
+        if (fstat(fd, &fileInfo) != -1) {
+            return fileInfo.st_size;
+        }
         close(fd);
     }
 
-    return fileInfo.st_size;
+    return -1;
+}
+
+long HttpServer::getFileSizeWithRetry(string fileName)
+{
+    for (int i = 0; i < getFileSizeRetries; i++) {
+        long response = getFileSize(fileName);
+        if (response != -1) {
+            return response;
+        }
+    }
+
+    throw runtime_error("Error while getting the file size");
 }
 
 void HttpServer::sendFile(int socket, string fileName)
@@ -31,53 +55,20 @@ void HttpServer::sendFile(int socket, string fileName)
     int fd = open(fileName.c_str(), O_RDONLY);
 
     if (fd == -1) {
-        perror("Internal Server Error Reading File");
-        exit(1);
+        throw runtime_error("Error while opening file to send");
     }
 
 	int sentDataSize, offset = 0;
 	do {
         chunkSize = read(fd, buffer, bufferSize);
         if (chunkSize < 0) {
-            perror("Erro reading chunk of a file");
-            exit(EXIT_FAILURE);
+            throw runtime_error("Error while reading file chunk");
         }
 
-        sentChunkSize = send(socket, buffer, chunkSize, 0);
-		if (sentChunkSize == -1) {
-            perror("Error sending chunk of a file");
-            exit(EXIT_FAILURE);
-        }
+        sentChunkSize = sendWithRetry(socket, buffer, chunkSize);
 	} while(chunkSize > 0 && sentChunkSize > 0);
 
     close(fd);
-}
-
-string HttpServer::getExtension(string fileName) {
-    return fileName.substr(fileName.find_last_of(".") + 1);
-}
-
-string HttpServer::getFileType(string fileName) {
-    string extension = getExtension(fileName);
-    const map<string, string> typeByExtensions = {
-        {"txt", "txt/plain"},
-        {"html", "text/html"},
-        {"css", "text/css"},
-        {"js", "text/javascript"},
-        {"ico", "image/vnd.microsoft.icon"},
-        {"json", "application/json"},
-        {"csv", "text/csv"},
-        {"xml", "application/xml"},
-        {"pdf", "application/pdf"},
-        {"png", "image/png"},
-        {"jpeg", "image/jpeg"},
-        {"jpg", "image/jpeg"}
-    };
-    
-    if (typeByExtensions.find(extension) == typeByExtensions.end()) // if extension was not found
-        return "application/octet-stream"; // see RFC2616
-
-    return typeByExtensions.at(extension);
 }
 
 void HttpServer::sendNotFoundResponse(int socket) {
@@ -87,28 +78,38 @@ void HttpServer::sendNotFoundResponse(int socket) {
                             + notFoundMessageSize + "\n\n"
                             + notFoundMessage;
 
-    send(socket, httpResponse.c_str(), (int)httpResponse.size(), 0);
+    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
 }
 
-void HttpServer::sendBadRequestResponse(int socket) {
-    string badRequestMessage = "400 Bad Request";
-    string badRequestMessageSize = to_string(badRequestMessage.size());
-    string httpResponse = "HTTP/1.1 400 Bad Request\nContent-Type: text/plain\nContent-Length: "
-                            + badRequestMessageSize + "\n\n"
-                            + badRequestMessage;
+void HttpServer::sendInternalServerErrorResponse(int socket) {
+    string internalServerErrorMessage = "500 Internal Server Error";
+    string internalServerErrorMessageSize = to_string(internalServerErrorMessage.size());
+    string httpResponse = "HTTP/1.1 500 Internal Server Error\nContent-Type: text/plain\nContent-Length: "
+                            + internalServerErrorMessageSize + "\n\n"
+                            + internalServerErrorMessage;
 
-    send(socket, httpResponse.c_str(), (int)httpResponse.size(), 0);
+    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
+}
+
+void HttpServer::sendMethodNotAllowedResponse(int socket) {
+    string methodNotAllowedMessage = "405 Method Not Allowed";
+    string methodNotAllowedMessageSize = to_string(methodNotAllowedMessage.size());
+    string httpResponse = "HTTP/1.1 Internal Server Error\nContent-Type: text/plain\nContent-Length: "
+                            + methodNotAllowedMessageSize + "\n\n"
+                            + methodNotAllowedMessage;
+
+    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
 }
 
 void HttpServer::sendOkResponseHeader(int socket, string fileName) {
-    long fileSize = getFileSize(fileName);
+    long fileSize = getFileSizeWithRetry(fileName);
     string httpResponse = "HTTP/1.1 200 OK\nContent-Type: "
-                            + getFileType(fileName)
+                            + StringUtils::getFileType(fileName)
                             + "\nContent-Length: "
                             +  to_string(fileSize)
                             + "\n\n";
 
-    send(socket, httpResponse.c_str(), (int)httpResponse.size(), 0);
+    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
 }
 
 void HttpServer::sendOkResponse(int socket, string fileName) {
@@ -145,6 +146,14 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
     return httpRequest;
 }
 
+void HttpServer::handleError(int socket) {
+    try {
+        sendInternalServerErrorResponse(socket);
+    } catch (...) {}
+    
+    disconnectClient(socket);
+}
+
 void HttpServer::processHttpRequest(int socket) {
     // printf("Processing Http Request To Socket: %d\n", socket);
     try {
@@ -154,16 +163,26 @@ void HttpServer::processHttpRequest(int socket) {
             httpRequest = getHttpRequest(socket);
             if (httpRequest.empty()) {
                 break;
+            } else if (httpRequest["Method"] != "GET") {
+                sendMethodNotAllowedResponse(socket);
             }
-            else if (httpRequest["Method"] == "GET") {
+            else {
                 string fileName = "." + (httpRequest["Url"] != "/" ? httpRequest["Url"] : "/index.html");
                 sendHttpResponse(fileName, socket);
-            } else {
-                sendBadRequestResponse(socket);
             }
         }
-    } catch (...) {
-       printf("Something went wrong processing http request\n");
+    }
+    catch(const std::runtime_error& re) {
+        handleError(socket);
+        cerr << "Runtime error: " << re.what() << std::endl;
+    }
+    catch(const std::exception& ex) {
+        handleError(socket);
+        cerr << "Error occurred: " << ex.what() << std::endl;
+    }
+    catch(...)
+    {
+        handleError(socket);
     }
     // printf("Request was completed\n");
 }
@@ -224,7 +243,7 @@ void HttpServer::start() {
         exit(EXIT_FAILURE);
     }
 
-    // printf("\n------------ Server Running on Port 8080 ------------\n\n");
+    printf("\n------------ Server Running on Port 8080 ------------\n\n");
 }
 
 void HttpServer::disconnectClient(int socket) {
