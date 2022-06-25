@@ -124,38 +124,6 @@ void HttpServer::sendHttpResponse(string fileName, int socket) {
     }
 }
 
-vector<string> HttpServer::split(const char *str, const char delimiter) {
-    vector<string> tokens;
-    char *it = strtok((char*)str, &delimiter);
-
-    while (it != NULL) {
-        string token = it;
-        tokens.push_back(token);
-        it = strtok(NULL, &delimiter);
-    }
-    return tokens;
-}
-
-map<string, string> HttpServer::parseHttpRequest(char *buffer) {
-    vector<string> lines = split(buffer, '\n');
-    vector<vector<string>> words(lines.size());
-    for (int i = 0; i < lines.size(); i++) {
-        words[i] = split(lines[i].c_str(), ' ');
-    }
-    // map<string, string> httpRequest = {
-    //     {"Method", words[0][0]},
-    //     {"Url", words[0][1]},
-    //     {"Protocol Version", words[0][2]},
-    //     {"Host", words[1][0]},
-    //     {"User-Agent", words[2][0]},
-    // };
-    map<string, string> httpRequest = {
-        {"Method", words[0][0]},
-        {"Url", words[0][1]}
-    };
-    return httpRequest;
-}
-
 map<string, string> HttpServer::getHttpRequest(int socket) {
     char buffer[MAX_HTTP_GET_MESSAGE_SIZE]; // TO DO alterar para malloc
     map<string, string> httpRequest;
@@ -164,7 +132,7 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
     int httpRequestSize = recv(socket , buffer, MAX_HTTP_GET_MESSAGE_SIZE, 0);
     if (httpRequestSize > 0) {
         // printf("%s\n", buffer);
-        httpRequest = parseHttpRequest(buffer);
+        httpRequest = StringUtils::parseHttpRequest(buffer);
     } else if (httpRequestSize <= 0) {
         if (httpRequestSize == -1) {
             perror("Disconnecting becausa a error or a timeout\n");
@@ -239,7 +207,7 @@ void HttpServer::start() {
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons( PORT );
+    address.sin_port = htons(PORT);
     
     memset(address.sin_zero, '\0', sizeof address.sin_zero);
     

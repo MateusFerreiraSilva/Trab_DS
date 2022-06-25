@@ -1,3 +1,6 @@
+StringUtils.o:	
+	g++ -c -g -std=c++17 StringUtils.cpp 
+
 ThreadPool.o:	
 	g++ -c -g -std=c++17 ThreadPool.cpp 
 
@@ -7,7 +10,7 @@ HttpServer.o:
 Main.o:
 	g++ -c -g -std=c++17 Main.cpp
 
-Objects: ThreadPool.o HttpServer.o Main.o
+Objects: StringUtils.o ThreadPool.o HttpServer.o Main.o
 
 HttpServer: Objects
 	g++ -o HttpServer *.o -lpthread
