@@ -4,16 +4,27 @@ bool FileUtils::doesFileExist(string fileName) {
     return access(fileName.c_str(), F_OK) != -1;
 }
 
-long FileUtils::getFileSize(string fileName)
-{
+long FileUtils::getFileSize(string fileName) {
+    int retries = 0;
+    const int maxNumOfRetries = 3;
+
     struct stat fileInfo;
     int fd = open(fileName.c_str(), O_RDONLY);
-    if (fd != -1) {
-        if (fstat(fd, &fileInfo) != -1) {
-            return fileInfo.st_size;
-        }
-        close(fd);
-    }
+    while (fd == -1) {
+        retries++;
+        if (retries < maxNumOfRetries)
+            sleep(1);
+        else
+            throw runtime_error("Error while opening the file");
+    } // succeeded reading a chung of the file
 
-    throw runtime_error("Error while getting the file size");
+    while (fstat(fd, &fileInfo) == -1) {
+        retries++;
+        if (retries < maxNumOfRetries)
+            sleep(1);
+        else
+            throw runtime_error("Error while getting the file size");
+    } // succeeded getting the file size
+
+    return fileInfo.st_size;
 }

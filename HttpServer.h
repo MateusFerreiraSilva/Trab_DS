@@ -40,6 +40,7 @@ class HttpServer {
         static void sendOkResponse(int socket, string fileName);
         static void sendOkResponseHeader(int socket, string fileName);
         static void sendFile(int socket, string fileName);
+        static void sendErrorResponseHeader(int socket, string message);
         static void sendNotFoundResponse(int socket);
         static void sendMethodNotAllowedResponse(int socket);
         static void sendInternalServerErrorResponse(int socket);

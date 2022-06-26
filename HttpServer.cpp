@@ -123,7 +123,9 @@ void HttpServer::setListenTimeout(int socket) {
 void HttpServer::handleError(int socket) {
     try {
         sendInternalServerErrorResponse(socket);
-    } catch (...) {}
+    } catch (...) {
+        printf("Error sending internal server error response");
+    }
     
     disconnectClient(socket);
 }
@@ -158,6 +160,8 @@ void HttpServer::sendOkResponse(int socket, string fileName) {
 }
 
 void HttpServer::sendOkResponseHeader(int socket, string fileName) {
+    int retries = 0;
+    const int maxNumOfRetries = 5;
     long fileSize = FileUtils::getFileSize(fileName);
     string httpResponse = "HTTP/1.1 200 OK\nContent-Type: "
                             + StringUtils::getFileType(fileName)
@@ -165,16 +169,21 @@ void HttpServer::sendOkResponseHeader(int socket, string fileName) {
                             +  to_string(fileSize)
                             + "\n\n";
 
-    if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
-        throw runtime_error("Error while sending http response");
+    while (send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
+        retries++;
+        if (retries < maxNumOfRetries)
+            sleep(1);
+        else
+            throw runtime_error("Error while sending http response");
     }
 }
 
 void HttpServer::sendFile(int socket, string fileName) {
-    const int bufferSize = threadPool->getSendBufferSize();
-    char* buffer = threadPool->getSendBuffer();
     int retries = 0;
     const int maxNumOfRetries = 10;
+
+    const int bufferSize = threadPool->getSendBufferSize();
+    char* buffer = threadPool->getSendBuffer();
     int chunkSize = 0, sentChunkSize = 0;
 
     int fd = open(fileName.c_str(), O_RDONLY);
@@ -221,38 +230,35 @@ void HttpServer::sendFile(int socket, string fileName) {
 	}
 }
 
-void HttpServer::sendNotFoundResponse(int socket) {
-    string notFoundMessage = "Ops! This doesn't exist.";
-    string notFoundMessageSize = to_string(notFoundMessage.size());
-    string httpResponse = "HTTP/1.1 404 Not Found\nContent-Type: text/plain\nContent-Length: "
-                            + notFoundMessageSize + "\n\n"
-                            + notFoundMessage;
+void HttpServer::sendErrorResponseHeader(int socket, string message) {
+    int retries = 0;
+    const int maxNumOfRetries = 5;
 
-    if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
-        throw runtime_error("Error while sending http response");
+    string messageSize = to_string(message.size());
+    string httpResponse = "HTTP/1.1 " + message + "\nContent-Type: text/plain\nContent-Length: "
+                            + messageSize + "\n\n"
+                            + message;
+
+    while (send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
+        retries++;
+        if (retries < maxNumOfRetries)
+            sleep(1);
+        else
+            throw runtime_error("Error while sending error http response");
     }
+}
+
+void HttpServer::sendNotFoundResponse(int socket) {
+    string notFoundMessage = "404 Not Found";
+    sendErrorResponseHeader(socket, notFoundMessage);
 }
 
 void HttpServer::sendMethodNotAllowedResponse(int socket) {
     string methodNotAllowedMessage = "405 Method Not Allowed";
-    string methodNotAllowedMessageSize = to_string(methodNotAllowedMessage.size());
-    string httpResponse = "HTTP/1.1 Internal Server Error\nContent-Type: text/plain\nContent-Length: "
-                            + methodNotAllowedMessageSize + "\n\n"
-                            + methodNotAllowedMessage;
-
-     if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
-        throw runtime_error("Error while sending http response");
-    }
+    sendErrorResponseHeader(socket, methodNotAllowedMessage);
 }
 
 void HttpServer::sendInternalServerErrorResponse(int socket) {
     string internalServerErrorMessage = "500 Internal Server Error";
-    string internalServerErrorMessageSize = to_string(internalServerErrorMessage.size());
-    string httpResponse = "HTTP/1.1 500 Internal Server Error\nContent-Type: text/plain\nContent-Length: "
-                            + internalServerErrorMessageSize + "\n\n"
-                            + internalServerErrorMessage;
-
-     if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
-        throw runtime_error("Error while sending http response");
-    }
+    sendErrorResponseHeader(socket, internalServerErrorMessage);
 }
