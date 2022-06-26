@@ -27,34 +27,35 @@ string StringUtils::getFileType(string fileName) {
     return typeByExtensions.at(extension);
 }
 
-// pass slice = 0 to request all slices 
-vector<string> StringUtils::split(const char *str, const char delimiter, const int slices) {
-    int currSlices = 0;
-    vector<string> tokens;
-    char *it = strtok((char*)str, &delimiter);
-
-    while (it != NULL) {
-        string token = it;
-        tokens.push_back(token);
-        currSlices++;
-
-        if (currSlices == slices) {
+map<string, string> StringUtils::parseHttpRequest(char *buffer, int bufferSize) {
+    string request = "";
+    for (int i = 0; i < bufferSize; i++) {
+        if (buffer[i] != '\r')
+            request.push_back(buffer[i]);
+        else
             break;
-        }
-
-        it = strtok(NULL, &delimiter);
     }
 
-    return tokens;
-}
+    string method, url;
+    int i;
+    for (i = 0; i < request.size(); i++) {
+        
+        if (request[i] != ' ')
+            method.push_back(request[i]);
+        else
+            break;
+    }
 
-map<string, string> StringUtils::parseHttpRequest(char *buffer) {
-    vector<string> request = split(buffer, '\n', 1);
-    vector<string> words = split(request.front().c_str(), ' ', 0);
+    for (int j = i + 1; j < request.size(); j++) {
+        if (request[j] != ' ')
+            url.push_back(request[j]);
+        else
+            break;
+    }
+
     map<string, string> httpRequest = {
-        {"Method", words[0]},
-        {"Url", words[1]}
-        // {"Version", words[2]}
+        {"Method", method},
+        {"Url", url}
     };
     
     return httpRequest;

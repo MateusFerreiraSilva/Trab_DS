@@ -4,17 +4,6 @@
 // TO DO garantir que a conexão seja fechada se não minha thread fica travada (ex: contador de erro quando recv retorna 0, ou seja recv pode retorna 0 no max N vezes se não o processo é encerrado)
 // TO DO programa trava depois de um http
 
-int HttpServer::sendWithRetry(int socket, const char* buffer, int bufferSize) {
-
-    for (int i = 0; i < sendRetries; i++) {
-        int response = send(socket, buffer, bufferSize, 0);
-        if(response != -1) {
-            return response;
-        }
-    }
-
-    throw runtime_error("Error while sending file");
-}
 
 bool HttpServer::doesFileExist(string fileName) {
     return access(fileName.c_str(), F_OK) != -1;
@@ -31,20 +20,9 @@ long HttpServer::getFileSize(string fileName)
         close(fd);
     }
 
-    return -1;
-}
-
-long HttpServer::getFileSizeWithRetry(string fileName)
-{
-    for (int i = 0; i < getFileSizeRetries; i++) {
-        long response = getFileSize(fileName);
-        if (response != -1) {
-            return response;
-        }
-    }
-
     throw runtime_error("Error while getting the file size");
 }
+
 
 void HttpServer::sendFile(int socket, string fileName)
 {
@@ -59,16 +37,23 @@ void HttpServer::sendFile(int socket, string fileName)
     }
 
 	int sentDataSize, offset = 0;
-	do {
+	while (true) {
         chunkSize = read(fd, buffer, bufferSize);
-        if (chunkSize < 0) {
+
+        if (chunkSize == 0) { // EOF
+            close(fd);
+            return;
+        } else if (chunkSize == -1) {
+            close(fd);
             throw runtime_error("Error while reading file chunk");
+        } else {
+            sentChunkSize = send(socket, buffer, chunkSize, MSG_NOSIGNAL);
+            if (sentChunkSize == -1) {
+                close(fd);
+                throw runtime_error("Error while sending chunk");
+            }
         }
-
-        sentChunkSize = sendWithRetry(socket, buffer, chunkSize);
-	} while(chunkSize > 0 && sentChunkSize > 0);
-
-    close(fd);
+	}
 }
 
 void HttpServer::sendNotFoundResponse(int socket) {
@@ -78,7 +63,9 @@ void HttpServer::sendNotFoundResponse(int socket) {
                             + notFoundMessageSize + "\n\n"
                             + notFoundMessage;
 
-    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
+    if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
+        throw runtime_error("Error while sending http response");
+    }
 }
 
 void HttpServer::sendInternalServerErrorResponse(int socket) {
@@ -88,7 +75,9 @@ void HttpServer::sendInternalServerErrorResponse(int socket) {
                             + internalServerErrorMessageSize + "\n\n"
                             + internalServerErrorMessage;
 
-    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
+     if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
+        throw runtime_error("Error while sending http response");
+    }
 }
 
 void HttpServer::sendMethodNotAllowedResponse(int socket) {
@@ -98,18 +87,22 @@ void HttpServer::sendMethodNotAllowedResponse(int socket) {
                             + methodNotAllowedMessageSize + "\n\n"
                             + methodNotAllowedMessage;
 
-    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
+     if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
+        throw runtime_error("Error while sending http response");
+    }
 }
 
 void HttpServer::sendOkResponseHeader(int socket, string fileName) {
-    long fileSize = getFileSizeWithRetry(fileName);
+    long fileSize = getFileSize(fileName);
     string httpResponse = "HTTP/1.1 200 OK\nContent-Type: "
                             + StringUtils::getFileType(fileName)
                             + "\nContent-Length: "
                             +  to_string(fileSize)
                             + "\n\n";
 
-    sendWithRetry(socket, httpResponse.c_str(), (int)httpResponse.size());
+    if(send(socket, httpResponse.c_str(), (int)httpResponse.size(), MSG_NOSIGNAL) == -1) {
+        throw runtime_error("Error while sending http response");
+    }
 }
 
 void HttpServer::sendOkResponse(int socket, string fileName) {
@@ -134,7 +127,7 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
     int httpRequestSize = recv(socket , buffer, bufferSize, 0);
     if (httpRequestSize > 0) {
         // printf("%s\n", buffer);
-        httpRequest = StringUtils::parseHttpRequest(buffer);
+        httpRequest = StringUtils::parseHttpRequest(buffer, bufferSize);
     } else if (httpRequestSize <= 0) {
         if (httpRequestSize == -1) {
             // perror("Disconnecting becausa a error or a timeout\n");

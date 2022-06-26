@@ -28,17 +28,13 @@ class HttpServer {
         inline static const int backlog = 10;  // backlog, defines the maximum number of pending connections that can be queued up before connections are refused
         inline static ThreadPool *threadPool;
         inline static const int secondsToTimeout = 1;
-        inline static const int sendRetries = 3;
-        inline static const int getFileSizeRetries = 3;
 
         static void setConfigs();
         static void processHttpRequest(int socket);
-        static int sendWithRetry(int socket, const char* buffer, int bufferSize);
         static map<string, string> getHttpRequest(int socket);
         static void sendHttpResponse(string fileName, int socket);
         static void sendFile(int socket, string fileName);
         static long getFileSize(string fileName);
-        static long getFileSizeWithRetry(string fileName);
         static void disconnectClient(int socket);
         static void handleError(int socket);
         static int acceptConnection(); // return socket with new connection

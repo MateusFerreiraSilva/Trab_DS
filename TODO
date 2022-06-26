@@ -10,3 +10,5 @@ Acredito que o fato de ser multi thread trava o servidor com multiplas solicita√
 
 httperf --server wailua --port 6800 --num-conns 100 --rate 10 --timeout 1
 httperf --server localhost --port 8080 --num-conns 10
+
+trocar strings para char*

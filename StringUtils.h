@@ -6,10 +6,9 @@ using namespace std;
 
 class StringUtils {
     private:
-        static vector<string> split(const char *str, const char delimiter, const int slices);
         static string getExtension(string fileName);
     public:
-        static map<string, string> parseHttpRequest(char *buffer);
+        static map<string, string> parseHttpRequest(char *buffer, int bufferSize);
         static string getFileType(string fileName);
 };
 
