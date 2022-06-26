@@ -16,21 +16,21 @@ class ThreadPool  {
         vector<thread> threads;
         queue<pair<void(*)(int), int>> jobs;
 
+        void allocateThreadResources();
+        void deallocateThreadResources();
         void threadLoop();
-        void allocateResources();
-        void threadExit();
     public:
         ThreadPool();
 
         void start();
-        void queueJob(void(*)(int), int arg);
         void stop();
-        bool busy();
+        void queueJob(void(*)(int), int arg);
 
         char* getRecvBuffer();
         int getRecvBufferSize();
         char* getSendBuffer();
         int getSendBufferSize();
+        bool shouldStop();
 };
 
 #endif

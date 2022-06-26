@@ -1,7 +1,8 @@
 #include "ThreadPool.h"
 
 ThreadPool::ThreadPool() {
-    numThreads = 100; // Max # of threads the system supports
+    // 200 best
+    numThreads = 200; // Max # of threads the system supports
     // numThreads = thread::hardware_concurrency();
     printf("Num threads: %d\n", numThreads);
 }
@@ -14,12 +15,26 @@ void ThreadPool::start() {
     }
 }
 
-void ThreadPool::allocateResources() {
+void ThreadPool::stop() {
+    printf("Stopping Threads");
+
+    shouldTerminate = true;
+
+    for (thread& active_thread : threads) {
+        active_thread.join();
+    }
+
+    threads.clear();
+
+    printf("Success Stopping Threads\n");
+}
+
+void ThreadPool::allocateThreadResources() {
     threadRecvBuffer[this_thread::get_id()] = (char*) malloc(threadRecvBufferSize * sizeof(char));
     threadSendBuffer[this_thread::get_id()] = (char*) malloc(threadSendBufferSize * sizeof(char));
 }
 
-void ThreadPool::threadExit() {
+void ThreadPool::deallocateThreadResources() {
     // printf("Realising threads...\n");
 
     if (threadRecvBuffer[this_thread::get_id()] != NULL) {
@@ -41,51 +56,13 @@ void ThreadPool::queueJob(void (*job)(int), int arg) {
     queueMutex.unlock();
 }
 
-char* ThreadPool::getRecvBuffer() {
-    return threadRecvBuffer[this_thread::get_id()];
-}
-
-int ThreadPool::getRecvBufferSize() {
-    return threadRecvBufferSize;
-}
-
-char* ThreadPool::getSendBuffer() {
-    return threadSendBuffer[this_thread::get_id()];
-}
-
-int ThreadPool::getSendBufferSize() {
-    return threadSendBufferSize;
-}
-
-void ThreadPool::stop() {
-    printf("Stopping Threads");
-
-    shouldTerminate = true;
-
-    for (thread& active_thread : threads) {
-        active_thread.join();
-    }
-
-    threads.clear();
-
-    printf("Success Stopping Threads\n");
-}
-
-bool ThreadPool::busy() {
-    bool poolbusy;
-    queueMutex.lock();
-    {
-        poolbusy = jobs.empty();
-    }
-    queueMutex.unlock();
-
-    return poolbusy;
-}
-
 void ThreadPool::threadLoop() {
     // cout << "-------Thread " << this_thread::get_id() << " has started-------\n" << endl;
     
-    allocateResources();
+    allocateThreadResources();
+    if (threadRecvBuffer[this_thread::get_id()] == NULL || threadSendBuffer[this_thread::get_id()] == NULL)
+        return;
+
     bool hasJob;
     void (*job)(int);
     int arg;
@@ -98,7 +75,7 @@ void ThreadPool::threadLoop() {
         {
             if (shouldTerminate) {
                 queueMutex.unlock();
-                threadExit();
+                deallocateThreadResources();
                 return;
             }
 
@@ -119,4 +96,24 @@ void ThreadPool::threadLoop() {
             // cout << "++++++ Thread " << this_thread::get_id() << " Has Done the job ++++++" << endl;
         }
     }
+}
+
+char* ThreadPool::getRecvBuffer() {
+    return threadRecvBuffer[this_thread::get_id()];
+}
+
+int ThreadPool::getRecvBufferSize() {
+    return threadRecvBufferSize;
+}
+
+char* ThreadPool::getSendBuffer() {
+    return threadSendBuffer[this_thread::get_id()];
+}
+
+int ThreadPool::getSendBufferSize() {
+    return threadSendBufferSize;
+}
+
+bool ThreadPool::shouldStop() {
+    return shouldTerminate;
 }

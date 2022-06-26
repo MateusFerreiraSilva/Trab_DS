@@ -29,29 +29,25 @@ class HttpServer {
         inline static const int secondsToTimeout = 1;
 
         static void setConfigs();
+        static int acceptConnection(); // return socket with new connection
+        static void disconnectClient(int socket);
+        static void queueRequest(int socket);
         static void processHttpRequest(int socket);
+        static void setListenTimeout(int socket);
+        static void handleError(int socket);
         static map<string, string> getHttpRequest(int socket);
         static void sendHttpResponse(string fileName, int socket);
-        static void sendFile(int socket, string fileName);
-        static void disconnectClient(int socket);
-        static void handleError(int socket);
-        static int acceptConnection(); // return socket with new connection
-        static void queueRequest(int socket);
-        static void buildHttpResponse();
-        static void sendNotFoundResponse(int socket);
-        static void sendInternalServerErrorResponse(int socket);
-        static void sendMethodNotAllowedResponse(int socket);
-        static void sendOkResponseHeader(int socket, string fileName);
         static void sendOkResponse(int socket, string fileName);
-        static void setListenTimeout(int socket);
+        static void sendOkResponseHeader(int socket, string fileName);
+        static void sendFile(int socket, string fileName);
+        static void sendNotFoundResponse(int socket);
+        static void sendMethodNotAllowedResponse(int socket);
+        static void sendInternalServerErrorResponse(int socket);
 
     public:
-        /*
-            Http does not limit the size of a GET request, but most of the browser have a limit between 2K~8K bytes.
-        */
         static void start();
-        static void run();
         static void exitRoutine();
+        static void run();
 };
 
 #endif
