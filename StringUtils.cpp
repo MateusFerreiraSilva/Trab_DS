@@ -6,20 +6,6 @@ string StringUtils::getExtension(string fileName) {
 
 string StringUtils::getFileType(string fileName) {
     string extension = getExtension(fileName);
-    const map<string, string> typeByExtensions = {
-        {"txt", "txt/plain"},
-        {"html", "text/html"},
-        {"css", "text/css"},
-        {"js", "text/javascript"},
-        {"ico", "image/vnd.microsoft.icon"},
-        {"json", "application/json"},
-        {"csv", "text/csv"},
-        {"xml", "application/xml"},
-        {"pdf", "application/pdf"},
-        {"png", "image/png"},
-        {"jpeg", "image/jpeg"},
-        {"jpg", "image/jpeg"}
-    };
     
     if (typeByExtensions.find(extension) == typeByExtensions.end()) // if extension was not found
         return "application/octet-stream"; // see RFC2616

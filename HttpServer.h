@@ -5,13 +5,12 @@
 #include <stdlib.h>
 #include <netinet/in.h> 
 #include <fcntl.h>
-#include <unistd.h>
 #include <errno.h>
-#include <sys/stat.h>
 #include <arpa/inet.h>
 
 #include "ThreadPool.h"
 #include "StringUtils.h"
+#include "FileUtils.h"
 
 #ifndef HTTP_SERVER
 #define HTTP_SERVER
@@ -34,13 +33,11 @@ class HttpServer {
         static map<string, string> getHttpRequest(int socket);
         static void sendHttpResponse(string fileName, int socket);
         static void sendFile(int socket, string fileName);
-        static long getFileSize(string fileName);
         static void disconnectClient(int socket);
         static void handleError(int socket);
         static int acceptConnection(); // return socket with new connection
         static void queueRequest(int socket);
         static void buildHttpResponse();
-        static bool doesFileExist(string fileName);
         static void sendNotFoundResponse(int socket);
         static void sendInternalServerErrorResponse(int socket);
         static void sendMethodNotAllowedResponse(int socket);

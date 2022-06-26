@@ -4,26 +4,6 @@
 // TO DO garantir que a conexão seja fechada se não minha thread fica travada (ex: contador de erro quando recv retorna 0, ou seja recv pode retorna 0 no max N vezes se não o processo é encerrado)
 // TO DO programa trava depois de um http
 
-
-bool HttpServer::doesFileExist(string fileName) {
-    return access(fileName.c_str(), F_OK) != -1;
-}
-
-long HttpServer::getFileSize(string fileName)
-{
-    struct stat fileInfo;
-    int fd = open(fileName.c_str(), O_RDONLY);
-    if (fd != -1) {
-        if (fstat(fd, &fileInfo) != -1) {
-            return fileInfo.st_size;
-        }
-        close(fd);
-    }
-
-    throw runtime_error("Error while getting the file size");
-}
-
-
 void HttpServer::sendFile(int socket, string fileName)
 {
     const int bufferSize = threadPool->getSendBufferSize();
@@ -93,7 +73,7 @@ void HttpServer::sendMethodNotAllowedResponse(int socket) {
 }
 
 void HttpServer::sendOkResponseHeader(int socket, string fileName) {
-    long fileSize = getFileSize(fileName);
+    long fileSize = FileUtils::getFileSize(fileName);
     string httpResponse = "HTTP/1.1 200 OK\nContent-Type: "
                             + StringUtils::getFileType(fileName)
                             + "\nContent-Length: "
@@ -111,7 +91,7 @@ void HttpServer::sendOkResponse(int socket, string fileName) {
 }
 
 void HttpServer::sendHttpResponse(string fileName, int socket) {
-    if (doesFileExist(fileName)) {
+    if (FileUtils::getFileSize(fileName)) {
         sendOkResponse(socket, fileName);
     } else {
         sendNotFoundResponse(socket);

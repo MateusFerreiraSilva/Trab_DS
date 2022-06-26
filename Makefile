@@ -1,19 +1,12 @@
-StringUtils.o:	
-	g++ -c -g -std=c++17 StringUtils.cpp 
+CC = g++
+# -Wall
+CFLAGS  = -c -g -std=c++17
 
-ThreadPool.o:	
-	g++ -c -g -std=c++17 ThreadPool.cpp 
+All:	
+	$(CC) $(CFLAGS) *.cpp 
 
-HttpServer.o:
-	g++ -c -g -std=c++17 HttpServer.cpp
-
-Main.o:
-	g++ -c -g -std=c++17 Main.cpp
-
-Objects: StringUtils.o ThreadPool.o HttpServer.o Main.o
-
-HttpServer: Objects
-	g++ -o HttpServer *.o -lpthread
+HttpServer: All
+	$(CC) -o HttpServer *.o -lpthread
 
 Rebuild: Clean HttpServer
 
