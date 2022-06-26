@@ -170,33 +170,52 @@ void HttpServer::sendOkResponseHeader(int socket, string fileName) {
     }
 }
 
-void HttpServer::sendFile(int socket, string fileName)
-{
+void HttpServer::sendFile(int socket, string fileName) {
     const int bufferSize = threadPool->getSendBufferSize();
     char* buffer = threadPool->getSendBuffer();
+    int retries = 0;
+    const int maxNumOfRetries = 10;
     int chunkSize = 0, sentChunkSize = 0;
 
     int fd = open(fileName.c_str(), O_RDONLY);
+    while (fd == -1) {
+        retries++;
+        if (retries < maxNumOfRetries) {
+            sleep(1);
+            fd = open(fileName.c_str(), O_RDONLY);
+        }
+        else {
+            throw runtime_error("Error while opening file to send");
+        }
+    } // succeeded reading the file
 
-    if (fd == -1) {
-        throw runtime_error("Error while opening file to send");
-    }
-
-	int sentDataSize, offset = 0;
 	while (true) {
         chunkSize = read(fd, buffer, bufferSize);
+        while (chunkSize == -1) {
+            retries++;
+            if (retries < maxNumOfRetries) {
+                sleep(1);
+                chunkSize = read(fd, buffer, bufferSize);
+            } else {
+                close(fd);
+                throw runtime_error("Error while reading file chunk");
+            }
+        } // succeeded reading a chung of the file
 
         if (chunkSize == 0) { // EOF
             close(fd);
-            return;
-        } else if (chunkSize == -1) {
-            close(fd);
-            throw runtime_error("Error while reading file chunk");
-        } else {
+            return; // has finished this file transfer
+        } else { // chunkSize > 0
             sentChunkSize = send(socket, buffer, chunkSize, MSG_NOSIGNAL);
-            if (sentChunkSize == -1) {
-                close(fd);
-                throw runtime_error("Error while sending chunk");
+            while (sentChunkSize == -1) {
+                retries++;
+                if (retries < maxNumOfRetries) {
+                    sleep(1);
+                    sentChunkSize = send(socket, buffer, chunkSize, MSG_NOSIGNAL);
+                } else {
+                    close(fd);
+                    throw runtime_error("Error while sending chunk");
+                }
             }
         }
 	}
