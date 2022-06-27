@@ -36,20 +36,20 @@ void HttpServer::start() {
         exit(EXIT_FAILURE);
     }
 
-    printf("\n------------ Server Running on Port 8080 ------------\n\n");
+    printf("\n------------ Server Running on Port %d ------------\n", PORT);
+    printf("\nPress Crtl + C to stop...\n");
 }
 
 void HttpServer::setConfigs() {
     atexit(exitRoutine);
     signal(SIGINT, exit);
-	signal(SIGKILL, exit);
-	signal(SIGQUIT, exit);
 }
 
 void HttpServer::exitRoutine()
 {
 	printf("Stopping Http Server...\n");
     threadPool->stop();
+    close(serverSocket);
 }
 
 void HttpServer::run() {
@@ -83,7 +83,7 @@ void HttpServer::queueRequest(int socket) {
 void HttpServer::processHttpRequest(int socket) {
     // printf("Processing Http Request To Socket: %d\n", socket);
     try {
-        setListenTimeout(socket);
+        setRecvTimeout(socket);
         map<string, string> httpRequest;
         while (!threadPool->shouldStop()) {
             httpRequest = getHttpRequest(socket);
@@ -113,7 +113,7 @@ void HttpServer::processHttpRequest(int socket) {
     // printf("Request was completed\n");
 }
 
-void HttpServer::setListenTimeout(int socket) {
+void HttpServer::setRecvTimeout(int socket) {
     struct timeval tv;
     tv.tv_sec = secondsToTimeout;
     tv.tv_usec = 0;
@@ -147,7 +147,7 @@ map<string, string> HttpServer::getHttpRequest(int socket) {
 }
 
 void HttpServer::sendHttpResponse(string fileName, int socket) {
-    if (FileUtils::getFileSize(fileName)) {
+    if (FileUtils::doesFileExist(fileName)) {
         sendOkResponse(socket, fileName);
     } else {
         sendNotFoundResponse(socket);
@@ -192,8 +192,7 @@ void HttpServer::sendFile(int socket, string fileName) {
         if (retries < maxNumOfRetries) {
             sleep(1);
             fd = open(fileName.c_str(), O_RDONLY);
-        }
-        else {
+        } else {
             throw runtime_error("Error while opening file to send");
         }
     } // succeeded reading the file

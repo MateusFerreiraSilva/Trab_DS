@@ -1,9 +1,6 @@
 #include "ThreadPool.h"
 
 ThreadPool::ThreadPool() {
-    // 200 best
-    numThreads = 200; // Max # of threads the system supports
-    // numThreads = thread::hardware_concurrency();
     printf("Num threads: %d\n", numThreads);
 }
 
@@ -16,7 +13,7 @@ void ThreadPool::start() {
 }
 
 void ThreadPool::stop() {
-    printf("Stopping Threads");
+    printf("Stopping Threads\n");
 
     shouldTerminate = true;
 

@@ -1,4 +1,10 @@
-#include <bits/stdc++.h>
+#include <stdio.h>
+#include <iostream>
+#include <string>
+#include <queue>
+#include <map>
+#include <thread>
+#include <mutex>
 using namespace std;
 
 #ifndef THREAD_POOL
@@ -6,9 +12,10 @@ using namespace std;
 
 class ThreadPool  {
     private:
-        int numThreads;
-        inline static const int threadRecvBufferSize = 1000 * 1024 * 2; // 2 MB
-        inline static const int threadSendBufferSize = 32767; // max send size, default limit of send system call
+        const int numThreads = 200; // 200 best
+        // const int numThreads = thread::hardware_concurrency(); // Max # of threads the system supports
+        const int threadRecvBufferSize = 1024 * 1024 * 2; // 2 MB
+        const int threadSendBufferSize = 32767; // max send size (32 KB aprox), default limit of send system call
         map<thread::id, char*> threadRecvBuffer;
         map<thread::id, char*> threadSendBuffer;
         bool shouldTerminate = false;        // Tells threads to stop looking for jobs

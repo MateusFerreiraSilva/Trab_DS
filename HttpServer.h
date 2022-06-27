@@ -1,5 +1,10 @@
-#include <bits/stdc++.h>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
 #include <stdio.h>
+#include <string.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -33,7 +38,7 @@ class HttpServer {
         static void disconnectClient(int socket);
         static void queueRequest(int socket);
         static void processHttpRequest(int socket);
-        static void setListenTimeout(int socket);
+        static void setRecvTimeout(int socket);
         static void handleError(int socket);
         static map<string, string> getHttpRequest(int socket);
         static void sendHttpResponse(string fileName, int socket);

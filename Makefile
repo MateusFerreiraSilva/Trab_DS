@@ -1,5 +1,4 @@
 CC = g++
-# -Wall
 CFLAGS  = -c -g -std=c++17
 
 All:	
